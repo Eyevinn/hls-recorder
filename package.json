@@ -1,0 +1,19 @@
+{
+  "name": "@eyevinn/hls-recorder",
+  "version": "0.1.0",
+  "description": "NPM library to record live HLS",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc --project ./",
+    "postversion": "git push && git push --tags",
+    "coverage": "nyc npm test && nyc report",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Eyevinn Technology AB <work@eyevinn.se>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^16.10.3",
+    "nyc": "^15.1.0",
+    "typescript": "^4.4.3"
+  }
+}
