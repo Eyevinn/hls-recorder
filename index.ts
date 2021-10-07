@@ -100,13 +100,15 @@ export class HLSRecorder extends EventEmitter {
   start() {
     return new Promise<string>(async (resolve, reject) => {
       try {
-        await this._loadAllManifest();
-        //console.log(JSON.stringify(this.segments, null, 2));
 
-        await timer(6000);
+        await this.startPlayheadAsync();
+        // await this._loadAllManifest();
+        // //console.log(JSON.stringify(this.segments, null, 2));
 
-        await this._loadAllManifest();
-        //console.log(JSON.stringify(this.segments, null, 2));
+        // await timer(6000);
+
+        // await this._loadAllManifest();
+        // //console.log(JSON.stringify(this.segments, null, 2));
         resolve("Success");
       } catch (err) {
         reject("Something went Wrong!");
@@ -115,10 +117,13 @@ export class HLSRecorder extends EventEmitter {
   }
 
   async startPlayheadAsync() {
+    // Pre-load
+    await this._loadAllManifest();
     debug(`[]: SessionLive-Playhead consumer started`);
     this.playheadState = PlayheadState.RUNNING;
     while (this.playheadState !== PlayheadState.CRASHED) {
       try {
+        console.log("IM INSDIE PLAYH")
         // Nothing to do if we have no Live Source to probe
         if (!this.masterManifest) {
           await timer(3000);
@@ -140,7 +145,7 @@ export class HLSRecorder extends EventEmitter {
         // Fetch Live-Source Segments, and get ready for on-the-fly manifest generation
         // And also compensate for processing time
         const tsIncrementBegin = Date.now();
-        await this._loadAllManifests();
+        await this._loadAllManifest();
         const tsIncrementEnd = Date.now();
 
         // Set the timer
@@ -148,9 +153,10 @@ export class HLSRecorder extends EventEmitter {
         tickInterval = segmentDurationMs - (tsIncrementEnd - tsIncrementBegin);
         tickInterval = tickInterval < 2 ? 2 : tickInterval;
 
-        debug(
+        console.log(
           `[]: SessionLive-Playhead going to ping again after ${tickInterval}ms`
         );
+
         await timer(tickInterval);
       } catch (err) {
         debug(`[]: SessionLive-Playhead consumer crashed`);

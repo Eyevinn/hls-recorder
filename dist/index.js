@@ -53,11 +53,12 @@ class HLSRecorder extends EventEmitter {
     start() {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
-                yield this._loadAllManifest();
-                //console.log(JSON.stringify(this.segments, null, 2));
-                yield timer(6000);
-                yield this._loadAllManifest();
-                //console.log(JSON.stringify(this.segments, null, 2));
+                yield this.startPlayheadAsync();
+                // await this._loadAllManifest();
+                // //console.log(JSON.stringify(this.segments, null, 2));
+                // await timer(6000);
+                // await this._loadAllManifest();
+                // //console.log(JSON.stringify(this.segments, null, 2));
                 resolve("Success");
             }
             catch (err) {
@@ -67,10 +68,13 @@ class HLSRecorder extends EventEmitter {
     }
     startPlayheadAsync() {
         return __awaiter(this, void 0, void 0, function* () {
+            // Pre-load
+            yield this._loadAllManifest();
             debug(`[]: SessionLive-Playhead consumer started`);
             this.playheadState = 1 /* RUNNING */;
             while (this.playheadState !== 3 /* CRASHED */) {
                 try {
+                    console.log("IM INSDIE PLAYH");
                     // Nothing to do if we have no Live Source to probe
                     if (!this.masterManifest) {
                         yield timer(3000);
@@ -88,13 +92,13 @@ class HLSRecorder extends EventEmitter {
                     // Fetch Live-Source Segments, and get ready for on-the-fly manifest generation
                     // And also compensate for processing time
                     const tsIncrementBegin = Date.now();
-                    yield this._loadAllManifests();
+                    yield this._loadAllManifest();
                     const tsIncrementEnd = Date.now();
                     // Set the timer
                     let tickInterval = 0;
                     tickInterval = segmentDurationMs - (tsIncrementEnd - tsIncrementBegin);
                     tickInterval = tickInterval < 2 ? 2 : tickInterval;
-                    debug(`[]: SessionLive-Playhead going to ping again after ${tickInterval}ms`);
+                    console.log(`[]: SessionLive-Playhead going to ping again after ${tickInterval}ms`);
                     yield timer(tickInterval);
                 }
                 catch (err) {
