@@ -105,7 +105,7 @@ const run = () => __awaiter(void 0, void 0, void 0, function* () {
     const engineOptions = {
         heartbeat: "/",
         channelManager: channelManager,
-        useDemuxedAudio: true,
+        //useDemuxedAudio: true,
         //cloudWatchMetrics: true
     };
     console.log(engineOptions);
@@ -113,7 +113,7 @@ const run = () => __awaiter(void 0, void 0, void 0, function* () {
     engine.start();
     engine.listen(8000);
     yield timer(3000);
-    const recorder = new _1.HLSRecorder(engine, { windowSize: -1, vod: false });
+    const recorder = new _1.HLSRecorder(engine, { windowSize: 120, vod: false });
     console.log("Starting HLSRecorder...");
     recorder
         .start()

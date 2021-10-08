@@ -111,7 +111,7 @@ const run = async () => {
   const engineOptions = {
     heartbeat: "/",
     channelManager: channelManager,
-    useDemuxedAudio: true,
+    //useDemuxedAudio: true,
     //cloudWatchMetrics: true
   };
   console.log(engineOptions);
@@ -120,7 +120,7 @@ const run = async () => {
   engine.start();
   engine.listen(8000);
   await timer(3000);
-  const recorder = new HLSRecorder(engine, { windowSize: -1, vod: false });
+  const recorder = new HLSRecorder(engine, { windowSize: 120, vod: false });
   console.log("Starting HLSRecorder...");
   recorder
     .start()
@@ -129,7 +129,7 @@ const run = async () => {
 
   recorder.on("mseq-increment", (mseq: number) => {
     console.log(
-      "Ooooh-weee Look at that. The mseq became:" + JSON.stringify(mseq)
+      "[test-server.js]: recorder.on('mseq-increment') triggered! The mseq became:" + JSON.stringify(mseq)
     );
   });
 };

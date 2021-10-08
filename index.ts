@@ -1,9 +1,15 @@
-import { start } from "repl";
-
 const EventEmitter = require("events").EventEmitter;
 const m3u8 = require("@eyevinn/m3u8");
 const str2stream = require("string-to-stream");
 const debug = require("debug")("recorder");
+const restify = require("restify");
+const errs = require("restify-errors");
+
+import {
+  _handleMasterManifest,
+  _handleMediaManifest,
+  IRecData,
+} from "./util/handlers";
 
 const timer = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -13,9 +19,20 @@ interface IRecorderOptions {
 }
 
 type Segment = {
-  index: number;
-  duration: number;
-  uri: string;
+  index: number | null;
+  duration: number | null;
+  uri: string | null;
+  endlist?: boolean;
+  discontinuity?: boolean;
+  daterange?: any;
+  cue?: {
+    in: boolean;
+    out: boolean;
+    cont: boolean | null;
+    duration: number;
+    scteData: string | null;
+    assetData: string | null;
+  } | null;
 };
 
 interface IVideoSegments {
@@ -34,7 +51,7 @@ interface IAudioSegments {
   };
 }
 
-interface ISegments {
+export interface ISegments {
   video: IVideoSegments;
   audio: IAudioSegments;
 }
@@ -62,18 +79,24 @@ HLS      /|\      /|
 Recorder/ | \     | \
 */
 export class HLSRecorder extends EventEmitter {
-  windowSize: number;
+  targetWindowSize: number;
+  currentWindowSize: number;
+  addEndTag: boolean;
   segments: ISegments;
   audioManifests: IAudioManifestList;
   mediaManifests: IMediaManifestList;
-  masterManifest: string;
+  masterManifest: any;
   playheadState: PlayheadState;
+  prevSourceMediaSeq: number;
+  recorderTargetDuration: number;
+  port: number
 
   constructor(source: any, opts: IRecorderOptions) {
     super();
 
-    this.windowSize = opts.windowSize ? opts.windowSize : -1;
-    this.vod = opts.vod ? opts.vod : false;
+    this.port = 8001;// TODO: get from options
+    this.targetWindowSize = opts.windowSize ? opts.windowSize : -1;
+    this.addEndTag = opts.vod ? opts.vod : false;
     if (typeof source === "string") {
       if (source.match(/master.m3u8/)) {
         this.liveMasterUri = source;
@@ -85,7 +108,9 @@ export class HLSRecorder extends EventEmitter {
       this.engine = source;
     }
 
-    this.recorderMediaSeq = 0;
+    this.currentWindowSize = 0;
+    this.prevSourceMediaSeq = 0;
+    this.recorderTargetDuration = 0;
     this.playheadState = PlayheadState.IDLE;
     this.masterManifest = "";
     this.mediaManifests = {};
@@ -94,21 +119,74 @@ export class HLSRecorder extends EventEmitter {
       video: {},
       audio: {},
     };
+    let recorderConfigs = {
+      Source: this.engine ? "Channel Engine" : source,
+      Options: opts,
+    };
+    debug("Recorder Configs->:", recorderConfigs);
+
+    // Setup Server [!] Borrowed from server.js in channelengine, TODO: tidy up
+    this.server = restify.createServer();
+    this.server.use(restify.plugins.queryParser());
+    this.serverStartTime = Date.now();
+
+    const handleMasterRoute = async (req: any, res: any, next: any) => {
+      debug(req.params);
+      let m;
+      if (req.params.file.match(/master.m3u8/)) {
+        await _handleMasterManifest(req, res, next, this.masterManifest);
+      } else if (
+        (m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/))
+      ) {
+        req.params[0] = m[1];
+        req.params[1] = m[2];
+        let data: IRecData = {
+          bw: m[1],
+          mseq: 1,
+          targetDuration: this.recorderTargetDuration,
+          allSegments: this.segments,
+        };
+        await _handleMediaManifest(req, res, next, data);
+      } else if (
+        (m = req.params.file.match(/master-(\S+)_(\S+).m3u8;session=(.*)$/))
+      ) {
+        // NOT READY...
+        req.params[0] = m[1];
+        req.params[1] = m[2];
+        req.params[2] = m[3];
+        //await this._handleAudioManifest(req, res, next);
+      }
+    };
+
+    this.server.get("/", (req: any, res: any, next: any) => {
+      debug("req.url=" + req.url);
+      res.send(200);
+      next();
+    });
+    this.server.get("/live/:file", async (req: any, res: any, next: any) => {
+      await handleMasterRoute(req, res, next);
+    });
+    this.server.get(
+      "/channels/:channelId/:file",
+      async (req: any, res: any, next: any) => {
+        req.query["channel"] = req.params.channelId;
+        await handleMasterRoute(req, res, next);
+      }
+    );
   }
 
   // Public Functions
   start() {
+
+    this.server.listen(this.port, () => {
+      debug("%s listening at %s", this.server.name, this.server.url);
+    });
+
     return new Promise<string>(async (resolve, reject) => {
       try {
 
-        await this.startPlayheadAsync();
-        // await this._loadAllManifest();
-        // //console.log(JSON.stringify(this.segments, null, 2));
+        await this.startPlayhead();
 
-        // await timer(6000);
-
-        // await this._loadAllManifest();
-        // //console.log(JSON.stringify(this.segments, null, 2));
         resolve("Success");
       } catch (err) {
         reject("Something went Wrong!");
@@ -116,22 +194,25 @@ export class HLSRecorder extends EventEmitter {
     });
   }
 
-  async startPlayheadAsync() {
+  async startPlayhead(): Promise<void> {
     // Pre-load
     await this._loadAllManifest();
-    debug(`[]: SessionLive-Playhead consumer started`);
-    this.playheadState = PlayheadState.RUNNING;
-    while (this.playheadState !== PlayheadState.CRASHED) {
+    debug(`Playhead consumer started`);
+    this.playheadState = PlayheadState.RUNNING as PlayheadState;
+    while (this.playheadState !== (PlayheadState.CRASHED as PlayheadState)) {
       try {
-        console.log("IM INSDIE PLAYH")
-        // Nothing to do if we have no Live Source to probe
+        // Nothing to do if we have no Source to probe
         if (!this.masterManifest) {
           await timer(3000);
           continue;
         }
 
-        // Let the playhead move at an interval set according to live segment duration
-        let segmentDurationMs = 6000;
+        if (this.playheadState === (PlayheadState.STOPPED as PlayheadState)) {
+          debug(`[]: Stopping playhead`);
+          return;
+        }
+        // Let the playhead move at an interval set according to top segment duration
+        let segmentDurationMs: any = 6000;
         let videoBws = Object.keys(this.segments["video"]);
         if (
           !videoBws.length &&
@@ -139,7 +220,8 @@ export class HLSRecorder extends EventEmitter {
           this.segments["video"][videoBws[0]].segList[0].duration
         ) {
           segmentDurationMs =
-            this.segments["video"][videoBws[0]].segList[0].duration * 1000;
+            this.segments["video"][videoBws[0]].segList[0].duration;
+          segmentDurationMs = segmentDurationMs * 1000;
         }
 
         // Fetch Live-Source Segments, and get ready for on-the-fly manifest generation
@@ -148,22 +230,40 @@ export class HLSRecorder extends EventEmitter {
         await this._loadAllManifest();
         const tsIncrementEnd = Date.now();
 
+        if (
+          this.targetWindowSize !== -1 &&
+          this.currentWindowSize >= this.targetWindowSize
+        ) {
+          debug(
+            `[]: Target Window Size of ${
+              this.targetWindowSize
+            } is Reached. Stopping Playhead ${
+              this.addEndTag ? "and creating a VOD..." : ""
+            }`
+          );
+          await this._addEndlistTag();
+          this.stopPlayhead();
+        }
+
         // Set the timer
         let tickInterval = 0;
         tickInterval = segmentDurationMs - (tsIncrementEnd - tsIncrementBegin);
         tickInterval = tickInterval < 2 ? 2 : tickInterval;
 
-        console.log(
-          `[]: SessionLive-Playhead going to ping again after ${tickInterval}ms`
-        );
+        console.log(`Playhead going to ping again after ${tickInterval}ms`);
 
         await timer(tickInterval);
       } catch (err) {
-        debug(`[]: SessionLive-Playhead consumer crashed`);
+        debug(`Playhead consumer crashed`);
         debug(err);
-        this.playheadState = PlayheadState.CRASHED;
+        this.playheadState = PlayheadState.CRASHED as PlayheadState;
       }
     }
+  }
+
+  stopPlayhead(): void {
+    debug(`[]: Stopping playhead consumer`);
+    this.playheadState = PlayheadState.STOPPED as PlayheadState;
   }
 
   // Private functions
@@ -172,21 +272,25 @@ export class HLSRecorder extends EventEmitter {
   // TODO: Parse and Store from live URI
   //----------------------------------------
 
-  async _loadAllManifest() {
+  async _loadAllManifest(): Promise<void> {
     try {
       if (this.engine) {
         await this._getEngineManifests();
       } else {
         await this._getLiveManifests();
       }
+
       await this._loadM3u8Segments();
 
+      debug(`Current Window Size-> ${this.currentWindowSize} seconds`);
+
+      // Prepare possible event to be emitted
       let firstMseq =
         this.segments["video"][Object.keys(this.segments["video"])[0]].mediaSeq;
 
-      if (firstMseq > this.recorderMediaSeq) {
-        this.recorderMediaSeq = firstMseq;
-        this.emit("mseq-increment", { mseq: this.recorderMediaSeq });
+      if (firstMseq > this.prevSourceMediaSeq) {
+        this.prevSourceMediaSeq = firstMseq;
+        this.emit("mseq-increment", { mseq: this.prevSourceMediaSeq });
       }
     } catch (err) {
       console.log("HELLO..");
@@ -194,11 +298,11 @@ export class HLSRecorder extends EventEmitter {
     }
   }
 
-  async _getLiveManifests() {
-    // TODO: . . . use node-fetch
+  async _getLiveManifests(): Promise<void> {
+    // TODO: . . . use 'node-fetch' on True Live stream
   }
 
-  async _getEngineManifests() {
+  async _getEngineManifests(): Promise<void> {
     const channelId = "1";
     try {
       if (this.masterManifest === "") {
@@ -211,7 +315,7 @@ export class HLSRecorder extends EventEmitter {
     }
   }
 
-  async _loadM3u8Segments() {
+  async _loadM3u8Segments(): Promise<void> {
     let loadMediaPromises: Promise<void>[] = [];
     let loadAudioPromises: Promise<void>[] = [];
 
@@ -232,11 +336,16 @@ export class HLSRecorder extends EventEmitter {
       }
     });
     await Promise.all(loadMediaPromises.concat(loadAudioPromises));
-
-    return "Load Successful";
+    debug(`Segment loading successful!`);
   }
 
-  async _loadMediaSegments(bw: number) {
+  /**
+   * This function should be able to handle parsing media manifest
+   * from live streams that may or may not have tags other than (duration, uri)
+   * @param bw
+   * @returns
+   */
+  async _loadMediaSegments(bw: number): Promise<void> {
     const parser = m3u8.createStream();
     let m3uString = this.mediaManifests[bw];
     str2stream(m3uString).pipe(parser);
@@ -245,34 +354,38 @@ export class HLSRecorder extends EventEmitter {
       parser.on("m3u", (m3u: any) => {
         let startIdx = 0;
         let currentMediaSeq = m3u.get("mediaSequence");
+        this.recorderTargetDuration = m3u.get("targetDuration");
 
         // Compare mseq counts
         if (this.segments["video"][bw] && this.segments["video"][bw].mediaSeq) {
           let storedMseq = this.segments["video"][bw].mediaSeq;
           let mseqDiff = currentMediaSeq - storedMseq;
           startIdx =
-            m3u.items.PlaylistItem.length - 1 - mseqDiff < 0
+            m3u.items.PlaylistItem.length - mseqDiff < 0
               ? 0
-              : m3u.items.PlaylistItem.length - 1 - mseqDiff;
+              : m3u.items.PlaylistItem.length - mseqDiff;
           // Update stored mseq
           this.segments["video"][bw].mediaSeq = currentMediaSeq;
         }
 
         // For each 'new' playlist item...
         for (let i = startIdx; i < m3u.items.PlaylistItem.length; i++) {
-          const item = m3u.items.PlaylistItem[i];
+          const playlistItem = m3u.items.PlaylistItem[i];
+          // Init first time.
           if (!this.segments["video"][bw]) {
             this.segments["video"][bw] = {
               mediaSeq: currentMediaSeq,
               segList: [],
             };
           }
-          let segment: Segment = {
-            index: i,
-            duration: item.properties.duration,
-            uri: item.properties.uri,
-          };
+          // Push new segment
+          let segment = this._playlistItemToSegment(playlistItem, i);
           this.segments["video"][bw].segList.push(segment);
+          //debug(`Pushed a new Segment! bw=${bw}`)
+          // Update current window size (seconds). Only needed for 1 profile.
+          if (bw === parseInt(Object.keys(this.segments["video"])[0])) {
+            this.currentWindowSize += !segment.duration ? 0 : segment.duration;
+          }
         }
         resolve();
       });
@@ -282,7 +395,10 @@ export class HLSRecorder extends EventEmitter {
     });
   }
 
-  async _loadAudioSegments(audioGroup: string, audioLanguage: string) {
+  async _loadAudioSegments(
+    audioGroup: string,
+    audioLanguage: string
+  ): Promise<void> {
     const parser = m3u8.createStream();
     let m3uString = this.audioManifests[audioGroup][audioLanguage];
     str2stream(m3uString).pipe(parser);
@@ -312,7 +428,8 @@ export class HLSRecorder extends EventEmitter {
 
         // For each 'new' playlist item...
         for (let i = startIdx; i < m3u.items.PlaylistItem.length; i++) {
-          const item = m3u.items.PlaylistItem[i];
+          const playlistItem = m3u.items.PlaylistItem[i];
+          // Init first time.
           if (!this.segments["audio"][audioGroup]) {
             this.segments["audio"][audioGroup] = {};
           }
@@ -322,11 +439,8 @@ export class HLSRecorder extends EventEmitter {
               segList: [],
             };
           }
-          let audioSegment: Segment = {
-            index: i,
-            duration: item.properties.duration,
-            uri: item.properties.uri,
-          };
+          // Push new segment
+          let audioSegment = this._playlistItemToSegment(playlistItem, i);
           this.segments["audio"][audioGroup][audioLanguage].segList.push(
             audioSegment
           );
@@ -336,6 +450,99 @@ export class HLSRecorder extends EventEmitter {
       parser.on("error", (exc: any) => {
         reject(exc);
       });
+    });
+  }
+
+  _playlistItemToSegment(playlistItem: any, idx: number): Segment {
+    let attributes = playlistItem["attributes"].attributes;
+    // for EXT-X-DISCONTINUITY
+    if (playlistItem.properties.discontinuity) {
+      return {
+        index: null,
+        duration: null,
+        uri: null,
+        discontinuity: true,
+      };
+    }
+    // for EXT-X-DATERANGE
+    if ("daterange" in attributes) {
+      return {
+        index: null,
+        duration: null,
+        uri: null,
+        daterange: {
+          id: attributes["daterange"]["ID"],
+          "start-date": attributes["daterange"]["START-DATE"],
+          "planned-duration": parseFloat(
+            attributes["daterange"]["PLANNED-DURATION"]
+          ),
+        },
+      };
+    }
+
+    // for all EXT-X-CUE related tags.
+    let assetData = playlistItem.get("assetdata");
+    let cueOut = playlistItem.get("cueout");
+    let cueIn = playlistItem.get("cuein");
+    let cueOutCont = playlistItem.get("cont-offset");
+    let duration = 0;
+    let scteData = playlistItem.get("sctedata");
+    if (typeof cueOut !== "undefined") {
+      duration = cueOut;
+    } else if (typeof cueOutCont !== "undefined") {
+      duration = playlistItem.get("cont-dur");
+    }
+    let cue =
+      cueOut || cueIn || cueOutCont || assetData
+        ? {
+            out: typeof cueOut !== "undefined",
+            cont: typeof cueOutCont !== "undefined" ? cueOutCont : null,
+            scteData: typeof scteData !== "undefined" ? scteData : null,
+            in: cueIn ? true : false,
+            duration: duration,
+            assetData: typeof assetData !== "undefined" ? assetData : null,
+          }
+        : null;
+
+    // For Normal #EXTINF + url
+    let segment: Segment = {
+      index: idx,
+      duration: playlistItem.properties.duration,
+      uri: playlistItem.properties.uri,
+      cue: cue,
+    };
+    return segment;
+  }
+
+  async _addEndlistTag(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      try {
+        const finalSegment: Segment = {
+          index: null,
+          duration: null,
+          uri: null,
+          endlist: true,
+        };
+        // Add tag to for all media
+        const bandwidths = Object.keys(this.segments["video"]);
+        bandwidths.forEach((bw) => {
+          this.segments["video"][bw].segList.push(finalSegment);
+        });
+        // Add tag for all audio
+        const groups = Object.keys(this.segments["audio"]);
+        groups.forEach((group) => {
+          const langs = Object.keys(this.segments["audio"][group]);
+          for (let i = 0; i < langs.length; i++) {
+            let lang = langs[i];
+            this.segments["audio"][group][lang].segList.push(finalSegment);
+          }
+        });
+        debug(`Endlist tag! Added to all Media Playlists!`);
+        resolve();
+      } catch (err) {
+        debug(`Error when adding Endlist tag! ${err}`);
+        reject(err);
+      }
     });
   }
 }
