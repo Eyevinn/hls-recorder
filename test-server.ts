@@ -120,22 +120,27 @@ const run = async () => {
   engine.start();
   engine.listen(8000);
   await timer(3000);
-  const recorder = new HLSRecorder(engine, { windowSize: 120, vod: false });
-  console.log("Starting HLSRecorder...");
+  const recorder = new HLSRecorder(engine, { windowSize: 120, vod: true });
+
+  console.log("[test-server.js]: Starting HLSRecorder...");
   recorder
     .start()
-    .then((msg: string) => console.log("...we done:", msg))
+    .then((msg: string) => console.log("[test-server.js]: ...we done:", msg))
     .catch((err) => console.log(err));
 
   recorder.on("mseq-increment", (mseq: number) => {
     console.log(
-      "[test-server.js]: recorder.on('mseq-increment') triggered! The mseq became:" + JSON.stringify(mseq)
+      "[test-server.js]: recorder.on('mseq-increment') triggered! The mseq became:" +
+        JSON.stringify(mseq)
     );
   });
 };
 
+// Run the Servers---
 run();
+//-------------------
 
+// Helper Function
 function ParseProfilesFromMasterManifest(masterURI: string) {
   let VOD_PROFILES: any = {
     video: [],

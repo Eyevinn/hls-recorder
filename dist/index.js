@@ -118,14 +118,13 @@ class HLSRecorder extends EventEmitter {
     }
     startPlayhead() {
         return __awaiter(this, void 0, void 0, function* () {
-            // Pre-load
+            // Pre-load (maybe skip this? need to test more)
             yield this._loadAllManifest();
             debug(`Playhead consumer started`);
             this.playheadState = 1 /* RUNNING */;
             while (this.playheadState !== 3 /* CRASHED */) {
                 try {
-                    console.log("IM INSDIE PLAYH");
-                    // Nothing to do if we have no Live Source to probe
+                    // Nothing to do if we have no Source to probe
                     if (!this.masterManifest) {
                         yield timer(3000);
                         continue;
@@ -144,15 +143,18 @@ class HLSRecorder extends EventEmitter {
                             this.segments["video"][videoBws[0]].segList[0].duration;
                         segmentDurationMs = segmentDurationMs * 1000;
                     }
-                    // Fetch Live-Source Segments, and get ready for on-the-fly manifest generation
+                    // Fetch Source Segments, and get ready manifest generation
                     // And also compensate for processing time
                     const tsIncrementBegin = Date.now();
                     yield this._loadAllManifest();
                     const tsIncrementEnd = Date.now();
+                    // Is the Event over?
                     if (this.targetWindowSize !== -1 &&
                         this.currentWindowSize >= this.targetWindowSize) {
                         debug(`[]: Target Window Size of ${this.targetWindowSize} is Reached. Stopping Playhead ${this.addEndTag ? "and creating a VOD..." : ""}`);
-                        yield this._addEndlistTag();
+                        if (this.addEndTag) {
+                            yield this._addEndlistTag();
+                        }
                         this.stopPlayhead();
                     }
                     // Set the timer

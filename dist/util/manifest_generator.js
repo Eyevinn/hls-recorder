@@ -10,8 +10,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GenerateMediaM3U8 = void 0;
-const m3u8 = require("@eyevinn/m3u8");
-const str2stream = require("string-to-stream");
 const debug = require("debug")("recorder-m3u8generator");
 function GenerateMediaM3U8(BW, MSEQ, TARGET_DURATION, SEGMENTS) {
     var _a;

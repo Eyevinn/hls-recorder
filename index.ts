@@ -195,7 +195,7 @@ export class HLSRecorder extends EventEmitter {
   }
 
   async startPlayhead(): Promise<void> {
-    // Pre-load
+    // Pre-load (maybe skip this? need to test more)
     await this._loadAllManifest();
     debug(`Playhead consumer started`);
     this.playheadState = PlayheadState.RUNNING as PlayheadState;
@@ -224,12 +224,13 @@ export class HLSRecorder extends EventEmitter {
           segmentDurationMs = segmentDurationMs * 1000;
         }
 
-        // Fetch Live-Source Segments, and get ready for on-the-fly manifest generation
+        // Fetch Source Segments, and get ready manifest generation
         // And also compensate for processing time
         const tsIncrementBegin = Date.now();
         await this._loadAllManifest();
         const tsIncrementEnd = Date.now();
 
+        // Is the Event over?
         if (
           this.targetWindowSize !== -1 &&
           this.currentWindowSize >= this.targetWindowSize
@@ -241,7 +242,9 @@ export class HLSRecorder extends EventEmitter {
               this.addEndTag ? "and creating a VOD..." : ""
             }`
           );
-          await this._addEndlistTag();
+          if (this.addEndTag) {
+            await this._addEndlistTag();
+          }
           this.stopPlayhead();
         }
 
@@ -282,7 +285,7 @@ export class HLSRecorder extends EventEmitter {
 
       await this._loadM3u8Segments();
 
-      debug(`Current Window Size-> ${this.currentWindowSize} seconds`);
+      debug(`Current Window Size-> [ ${this.currentWindowSize} ] seconds`);
 
       // Prepare possible event to be emitted
       let firstMseq =

@@ -1,6 +1,4 @@
 import { ISegments } from "../index";
-const m3u8 = require("@eyevinn/m3u8");
-const str2stream = require("string-to-stream");
 const debug = require("debug")("recorder-m3u8generator");
 
 export async function GenerateMediaM3U8(

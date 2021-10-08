@@ -113,17 +113,21 @@ const run = () => __awaiter(void 0, void 0, void 0, function* () {
     engine.start();
     engine.listen(8000);
     yield timer(3000);
-    const recorder = new _1.HLSRecorder(engine, { windowSize: 120, vod: false });
-    console.log("Starting HLSRecorder...");
+    const recorder = new _1.HLSRecorder(engine, { windowSize: 120, vod: true });
+    console.log("[test-server.js]: Starting HLSRecorder...");
     recorder
         .start()
-        .then((msg) => console.log("...we done:", msg))
+        .then((msg) => console.log("[test-server.js]: ...we done:", msg))
         .catch((err) => console.log(err));
     recorder.on("mseq-increment", (mseq) => {
-        console.log("Ooooh-weee Look at that. The mseq became:" + JSON.stringify(mseq));
+        console.log("[test-server.js]: recorder.on('mseq-increment') triggered! The mseq became:" +
+            JSON.stringify(mseq));
     });
 });
+// Run the Servers---
 run();
+//-------------------
+// Helper Function
 function ParseProfilesFromMasterManifest(masterURI) {
     let VOD_PROFILES = {
         video: [],
