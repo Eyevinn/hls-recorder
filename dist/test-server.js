@@ -113,7 +113,7 @@ const run = () => __awaiter(void 0, void 0, void 0, function* () {
     engine.start();
     engine.listen(8000);
     yield timer(3000);
-    const recorder = new _1.HLSRecorder(engine, { windowSize: 120, vod: true });
+    const recorder = new _1.HLSRecorder(engine, { recordDuration: 120, windowSize: -1, vod: true });
     console.log("[test-server.js]: Starting HLSRecorder...");
     recorder
         .start()

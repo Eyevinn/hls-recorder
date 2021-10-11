@@ -120,7 +120,7 @@ const run = async () => {
   engine.start();
   engine.listen(8000);
   await timer(3000);
-  const recorder = new HLSRecorder(engine, { windowSize: 120, vod: true });
+  const recorder = new HLSRecorder(engine, { recordDuration: 120, windowSize: -1, vod: true });
 
   console.log("[test-server.js]: Starting HLSRecorder...");
   recorder

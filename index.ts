@@ -14,8 +14,9 @@ import {
 const timer = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 interface IRecorderOptions {
-  windowSize: number;
-  vod: boolean;
+  recordDuration?: number; // how long in seconds before ending event-stream
+  windowSize?: number; // sliding window size
+  vod?: boolean; // end event by adding a endlist tag
 }
 
 type Segment = {
@@ -81,6 +82,8 @@ Recorder/ | \     | \
 export class HLSRecorder extends EventEmitter {
   targetWindowSize: number;
   currentWindowSize: number;
+  targetRecordDuration: number;
+  currentRecordDuration: number;
   addEndTag: boolean;
   segments: ISegments;
   audioManifests: IAudioManifestList;
@@ -88,14 +91,15 @@ export class HLSRecorder extends EventEmitter {
   masterManifest: any;
   playheadState: PlayheadState;
   prevSourceMediaSeq: number;
-  recorderTargetDuration: number;
-  port: number
+  recorderM3U8TargetDuration: number;
+  port: number;
 
   constructor(source: any, opts: IRecorderOptions) {
     super();
 
-    this.port = 8001;// TODO: get from options
+    this.port = 8001; // TODO: get from options
     this.targetWindowSize = opts.windowSize ? opts.windowSize : -1;
+    this.targetRecordDuration = opts.recordDuration ? opts.recordDuration : -1;
     this.addEndTag = opts.vod ? opts.vod : false;
     if (typeof source === "string") {
       if (source.match(/master.m3u8/)) {
@@ -109,8 +113,9 @@ export class HLSRecorder extends EventEmitter {
     }
 
     this.currentWindowSize = 0;
+    this.currentRecordDuration = 0;
     this.prevSourceMediaSeq = 0;
-    this.recorderTargetDuration = 0;
+    this.recorderM3U8TargetDuration = 0;
     this.playheadState = PlayheadState.IDLE;
     this.masterManifest = "";
     this.mediaManifests = {};
@@ -143,7 +148,7 @@ export class HLSRecorder extends EventEmitter {
         let data: IRecData = {
           bw: m[1],
           mseq: 1,
-          targetDuration: this.recorderTargetDuration,
+          targetDuration: this.recorderM3U8TargetDuration,
           allSegments: this.segments,
         };
         await _handleMediaManifest(req, res, next, data);
@@ -177,14 +182,12 @@ export class HLSRecorder extends EventEmitter {
 
   // Public Functions
   start() {
-
     this.server.listen(this.port, () => {
       debug("%s listening at %s", this.server.name, this.server.url);
     });
 
     return new Promise<string>(async (resolve, reject) => {
       try {
-
         await this.startPlayhead();
 
         resolve("Success");
@@ -232,12 +235,12 @@ export class HLSRecorder extends EventEmitter {
 
         // Is the Event over?
         if (
-          this.targetWindowSize !== -1 &&
-          this.currentWindowSize >= this.targetWindowSize
+          this.targetRecordDuration !== -1 &&
+          this.currentRecordDuration >= this.targetRecordDuration
         ) {
           debug(
-            `[]: Target Window Size of ${
-              this.targetWindowSize
+            `Target Recording Duration of ${
+              this.targetRecordDuration
             } is Reached. Stopping Playhead ${
               this.addEndTag ? "and creating a VOD..." : ""
             }`
@@ -285,7 +288,14 @@ export class HLSRecorder extends EventEmitter {
 
       await this._loadM3u8Segments();
 
-      debug(`Current Window Size-> [ ${this.currentWindowSize} ] seconds`);
+      if (this.targetWindowSize !== -1) {
+        debug(`Current Window Size-> [ ${this.currentWindowSize} ] seconds`);
+      }
+      if (this.targetRecordDuration !== -1) {
+        debug(
+          `Current Recording Duration-> [ ${this.currentRecordDuration} ] seconds`
+        );
+      }
 
       // Prepare possible event to be emitted
       let firstMseq =
@@ -357,7 +367,7 @@ export class HLSRecorder extends EventEmitter {
       parser.on("m3u", (m3u: any) => {
         let startIdx = 0;
         let currentMediaSeq = m3u.get("mediaSequence");
-        this.recorderTargetDuration = m3u.get("targetDuration");
+        this.recorderM3U8TargetDuration = m3u.get("targetDuration");
 
         // Compare mseq counts
         if (this.segments["video"][bw] && this.segments["video"][bw].mediaSeq) {
@@ -387,7 +397,16 @@ export class HLSRecorder extends EventEmitter {
           //debug(`Pushed a new Segment! bw=${bw}`)
           // Update current window size (seconds). Only needed for 1 profile.
           if (bw === parseInt(Object.keys(this.segments["video"])[0])) {
-            this.currentWindowSize += !segment.duration ? 0 : segment.duration;
+            if (this.targetWindowSize !== -1) {
+              this.currentWindowSize += !segment.duration
+                ? 0
+                : segment.duration;
+            }
+            if (this.targetRecordDuration !== -1) {
+              this.currentRecordDuration += !segment.duration
+                ? 0
+                : segment.duration;
+            }
           }
         }
         resolve();

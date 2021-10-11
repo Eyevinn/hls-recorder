@@ -30,6 +30,7 @@ class HLSRecorder extends EventEmitter {
         super();
         this.port = 8001; // TODO: get from options
         this.targetWindowSize = opts.windowSize ? opts.windowSize : -1;
+        this.targetRecordDuration = opts.recordDuration ? opts.recordDuration : -1;
         this.addEndTag = opts.vod ? opts.vod : false;
         if (typeof source === "string") {
             if (source.match(/master.m3u8/)) {
@@ -44,8 +45,9 @@ class HLSRecorder extends EventEmitter {
             this.engine = source;
         }
         this.currentWindowSize = 0;
+        this.currentRecordDuration = 0;
         this.prevSourceMediaSeq = 0;
-        this.recorderTargetDuration = 0;
+        this.recorderM3U8TargetDuration = 0;
         this.playheadState = 0 /* IDLE */;
         this.masterManifest = "";
         this.mediaManifests = {};
@@ -75,7 +77,7 @@ class HLSRecorder extends EventEmitter {
                 let data = {
                     bw: m[1],
                     mseq: 1,
-                    targetDuration: this.recorderTargetDuration,
+                    targetDuration: this.recorderM3U8TargetDuration,
                     allSegments: this.segments,
                 };
                 yield (0, handlers_1._handleMediaManifest)(req, res, next, data);
@@ -149,9 +151,9 @@ class HLSRecorder extends EventEmitter {
                     yield this._loadAllManifest();
                     const tsIncrementEnd = Date.now();
                     // Is the Event over?
-                    if (this.targetWindowSize !== -1 &&
-                        this.currentWindowSize >= this.targetWindowSize) {
-                        debug(`[]: Target Window Size of ${this.targetWindowSize} is Reached. Stopping Playhead ${this.addEndTag ? "and creating a VOD..." : ""}`);
+                    if (this.targetRecordDuration !== -1 &&
+                        this.currentRecordDuration >= this.targetRecordDuration) {
+                        debug(`Target Recording Duration of ${this.targetRecordDuration} is Reached. Stopping Playhead ${this.addEndTag ? "and creating a VOD..." : ""}`);
                         if (this.addEndTag) {
                             yield this._addEndlistTag();
                         }
@@ -190,7 +192,12 @@ class HLSRecorder extends EventEmitter {
                     yield this._getLiveManifests();
                 }
                 yield this._loadM3u8Segments();
-                debug(`Current Window Size-> ${this.currentWindowSize} seconds`);
+                if (this.targetWindowSize !== -1) {
+                    debug(`Current Window Size-> [ ${this.currentWindowSize} ] seconds`);
+                }
+                if (this.targetRecordDuration !== -1) {
+                    debug(`Current Recording Duration-> [ ${this.currentRecordDuration} ] seconds`);
+                }
                 // Prepare possible event to be emitted
                 let firstMseq = this.segments["video"][Object.keys(this.segments["video"])[0]].mediaSeq;
                 if (firstMseq > this.prevSourceMediaSeq) {
@@ -262,7 +269,7 @@ class HLSRecorder extends EventEmitter {
                 parser.on("m3u", (m3u) => {
                     let startIdx = 0;
                     let currentMediaSeq = m3u.get("mediaSequence");
-                    this.recorderTargetDuration = m3u.get("targetDuration");
+                    this.recorderM3U8TargetDuration = m3u.get("targetDuration");
                     // Compare mseq counts
                     if (this.segments["video"][bw] && this.segments["video"][bw].mediaSeq) {
                         let storedMseq = this.segments["video"][bw].mediaSeq;
@@ -290,7 +297,16 @@ class HLSRecorder extends EventEmitter {
                         //debug(`Pushed a new Segment! bw=${bw}`)
                         // Update current window size (seconds). Only needed for 1 profile.
                         if (bw === parseInt(Object.keys(this.segments["video"])[0])) {
-                            this.currentWindowSize += !segment.duration ? 0 : segment.duration;
+                            if (this.targetWindowSize !== -1) {
+                                this.currentWindowSize += !segment.duration
+                                    ? 0
+                                    : segment.duration;
+                            }
+                            if (this.targetRecordDuration !== -1) {
+                                this.currentRecordDuration += !segment.duration
+                                    ? 0
+                                    : segment.duration;
+                            }
                         }
                     }
                     resolve();
