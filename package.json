@@ -7,8 +7,8 @@
     "build": "tsc --project ./",
     "postversion": "git push && git push --tags",
     "coverage": "nyc npm test && nyc report",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev-start": " node dist/test-server.js"
+    "dev-start": " node dist/test-server.js",
+    "test": "echo \"WARN: no test specified\" && exit 0"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "license": "MIT",
