@@ -229,6 +229,9 @@ export class HLSRecorder extends EventEmitter {
 
     return new Promise<string>(async (resolve, reject) => {
       try {
+        if (this.engine) {
+          this.engine.start();
+        }
         // Try to require manifest at set interval
         await this.startPlayhead();
         resolve("Success");

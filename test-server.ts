@@ -118,7 +118,7 @@ const run = async () => {
 
   const engine = new ChannelEngine(assetManager, engineOptions);
   engine.start();
-  engine.listen(8000);
+  //engine.listen(8000);
   await timer(3000);
   let liveURI =
     "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8";
