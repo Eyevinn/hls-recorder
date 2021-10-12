@@ -105,7 +105,7 @@ const run = () => __awaiter(void 0, void 0, void 0, function* () {
     const engineOptions = {
         heartbeat: "/",
         channelManager: channelManager,
-        //useDemuxedAudio: true,
+        useDemuxedAudio: true,
         //cloudWatchMetrics: true
     };
     console.log(engineOptions);
@@ -113,15 +113,48 @@ const run = () => __awaiter(void 0, void 0, void 0, function* () {
     engine.start();
     engine.listen(8000);
     yield timer(3000);
-    const recorder = new _1.HLSRecorder(engine, { recordDuration: 120, windowSize: -1, vod: true });
+    let liveURI = "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8";
+    const recorder = new _1.HLSRecorder(engine, {
+        recordDuration: 120,
+        vod: true,
+    });
     console.log("[test-server.js]: Starting HLSRecorder...");
     recorder
         .start()
-        .then((msg) => console.log("[test-server.js]: ...we done:", msg))
+        .then((msg) => console.log("[test-server.js]: ...we are done:", msg))
         .catch((err) => console.log(err));
-    recorder.on("mseq-increment", (mseq) => {
-        console.log("[test-server.js]: recorder.on('mseq-increment') triggered! The mseq became:" +
-            JSON.stringify(mseq));
+    recorder.on("mseq-increment", (data) => {
+        console.log("Event Emitted");
+        let testbw = Object.keys(data.allPlaylistSegments["video"])[0];
+        recorder
+            .createAudioM3U8("aac", "sp", data.allPlaylistSegments)
+            .then((m3u) => {
+            console.log(m3u);
+        });
+        // console.log(
+        //   `[test-server.js]: recorder.on('mseq-increment') triggered! The mseq became:
+        //     ${JSON.stringify(
+        //       data.allPlaylistSegments["video"][
+        //         Object.keys(data.allPlaylistSegments["video"])[0]
+        //       ].mediaSeq
+        //     )}\n
+        //     Video Profiles: ${JSON.stringify(
+        //       Object.keys(data.allPlaylistSegments["video"]),
+        //       null,
+        //       2
+        //     )}\n
+        //     Audio Profiles: ${JSON.stringify(
+        //       Object.keys(data.allPlaylistSegments["audio"]),
+        //       null,
+        //       2
+        //     )}\n
+        //     All profiles contain [${
+        //       data.allPlaylistSegments["video"][
+        //         Object.keys(data.allPlaylistSegments["video"])[0]
+        //       ].segList.length
+        //     }] segments.
+        //     `
+        // );
     });
 });
 // Run the Servers---

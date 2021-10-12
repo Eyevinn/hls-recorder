@@ -1,4 +1,4 @@
-import { HLSRecorder } from ".";
+import { HLSRecorder, ISegments } from ".";
 const ChannelEngine = require("eyevinn-channel-engine");
 const m3u8 = require("@eyevinn/m3u8");
 const urlFetch = require("node-fetch");
@@ -111,7 +111,7 @@ const run = async () => {
   const engineOptions = {
     heartbeat: "/",
     channelManager: channelManager,
-    //useDemuxedAudio: true,
+    useDemuxedAudio: true,
     //cloudWatchMetrics: true
   };
   console.log(engineOptions);
@@ -120,19 +120,54 @@ const run = async () => {
   engine.start();
   engine.listen(8000);
   await timer(3000);
-  const recorder = new HLSRecorder(engine, { recordDuration: 120, windowSize: -1, vod: true });
+  let liveURI =
+    "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8";
+  const recorder = new HLSRecorder(engine, {
+    recordDuration: 120,
+    vod: true,
+  });
 
   console.log("[test-server.js]: Starting HLSRecorder...");
   recorder
     .start()
-    .then((msg: string) => console.log("[test-server.js]: ...we done:", msg))
+    .then((msg: string) =>
+      console.log("[test-server.js]: ...we are done:", msg)
+    )
     .catch((err) => console.log(err));
 
-  recorder.on("mseq-increment", (mseq: number) => {
-    console.log(
-      "[test-server.js]: recorder.on('mseq-increment') triggered! The mseq became:" +
-        JSON.stringify(mseq)
-    );
+  recorder.on("mseq-increment", (data: { allPlaylistSegments: ISegments }) => {
+    console.log("Event Emitted");
+    let testbw = Object.keys(data.allPlaylistSegments["video"])[0];
+    recorder
+      .createAudioM3U8("aac", "sp", data.allPlaylistSegments)
+      .then((m3u) => {
+        console.log(m3u);
+      });
+
+    // console.log(
+    //   `[test-server.js]: recorder.on('mseq-increment') triggered! The mseq became:
+    //     ${JSON.stringify(
+    //       data.allPlaylistSegments["video"][
+    //         Object.keys(data.allPlaylistSegments["video"])[0]
+    //       ].mediaSeq
+    //     )}\n
+    //     Video Profiles: ${JSON.stringify(
+    //       Object.keys(data.allPlaylistSegments["video"]),
+    //       null,
+    //       2
+    //     )}\n
+    //     Audio Profiles: ${JSON.stringify(
+    //       Object.keys(data.allPlaylistSegments["audio"]),
+    //       null,
+    //       2
+    //     )}\n
+    //     All profiles contain [${
+    //       data.allPlaylistSegments["video"][
+    //         Object.keys(data.allPlaylistSegments["video"])[0]
+    //       ].segList.length
+    //     }] segments.
+    //     `
+    // );
   });
 };
 

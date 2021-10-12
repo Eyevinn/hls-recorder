@@ -12,6 +12,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports._handleAudioManifest = exports._handleMediaManifest = exports._handleMasterManifest = void 0;
 const debug = require("debug")("recorder");
+const url = require("url");
 const manifest_generator_1 = require("./manifest_generator");
 function _handleMasterManifest(req, res, next, masterM3u) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -35,7 +36,7 @@ function _handleMediaManifest(req, res, next, recData) {
         try {
             let body = null;
             debug(`Responding with dvr media manifest`);
-            body = yield (0, manifest_generator_1.GenerateMediaM3U8)(req.params[0], recData.mseq, recData.targetDuration, recData.allSegments);
+            body = yield (0, manifest_generator_1.GenerateMediaM3U8)(req.params[0], recData);
             if (body !== null) {
                 res.sendRaw(200, Buffer.from(body, "utf8"), {
                     "Content-Type": "application/x-mpegURL;charset=UTF-8",
@@ -50,8 +51,25 @@ function _handleMediaManifest(req, res, next, recData) {
     });
 }
 exports._handleMediaManifest = _handleMediaManifest;
-function _handleAudioManifest(req, res, next) {
-    // TODO .....
+function _handleAudioManifest(req, res, next, recData) {
+    return __awaiter(this, void 0, void 0, function* () {
+        debug(`req.url=${req.url}`);
+        try {
+            let body = null;
+            debug(`Responding with dvr media manifest`);
+            body = yield (0, manifest_generator_1.GenerateAudioM3U8)(req.params[0], req.params[1], recData);
+            if (body !== null) {
+                res.sendRaw(200, Buffer.from(body, "utf8"), {
+                    "Content-Type": "application/x-mpegURL;charset=UTF-8",
+                    "Access-Control-Allow-Origin": "*",
+                });
+            }
+            next();
+        }
+        catch (err) {
+            next(console.error(err));
+        }
+    });
 }
 exports._handleAudioManifest = _handleAudioManifest;
 //# sourceMappingURL=handlers.js.map

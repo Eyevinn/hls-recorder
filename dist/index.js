@@ -16,8 +16,13 @@ const str2stream = require("string-to-stream");
 const debug = require("debug")("recorder");
 const restify = require("restify");
 const errs = require("restify-errors");
+const url = require("url");
+const urlFetch = require("node-fetch");
+const { AbortController } = require("abort-controller");
+const manifest_generator_1 = require("./util/manifest_generator");
 const handlers_1 = require("./util/handlers");
 const timer = (ms) => new Promise((res) => setTimeout(res, ms));
+const FAIL_TIMEOUT = 3000;
 /*
          ___
        [|   |=|{)__
@@ -28,13 +33,17 @@ Recorder/ | \     | \
 class HLSRecorder extends EventEmitter {
     constructor(source, opts) {
         super();
-        this.port = 8001; // TODO: get from options
+        this.port = process.env.PORT || "8001"; // TODO: get from options
         this.targetWindowSize = opts.windowSize ? opts.windowSize : -1;
         this.targetRecordDuration = opts.recordDuration ? opts.recordDuration : -1;
         this.addEndTag = opts.vod ? opts.vod : false;
         if (typeof source === "string") {
             if (source.match(/master.m3u8/)) {
                 this.liveMasterUri = source;
+                this.livePlaylistUris = {
+                    video: {},
+                    audio: {},
+                };
             }
             else {
                 throw new Error("Invalid source URI!");
@@ -43,12 +52,18 @@ class HLSRecorder extends EventEmitter {
         else {
             // Assume user sends a channel-engine instance as input arg
             this.engine = source;
+            this.liveMasterUri = null;
+            this.livePlaylistUris = null;
         }
         this.currentWindowSize = 0;
         this.currentRecordDuration = 0;
         this.prevSourceMediaSeq = 0;
+        this.prevMediaSeq = 0;
         this.recorderM3U8TargetDuration = 0;
         this.playheadState = 0 /* IDLE */;
+        this.sourceMasterManifest = "";
+        this.sourceMediaManifestURIs = {};
+        this.sourceAudioManifestURIs = {};
         this.masterManifest = "";
         this.mediaManifests = {};
         this.audioManifests = {};
@@ -61,7 +76,7 @@ class HLSRecorder extends EventEmitter {
             Options: opts,
         };
         debug("Recorder Configs->:", recorderConfigs);
-        // Setup Server [!] Borrowed from server.js in channelengine, TODO: tidy up
+        // Setup Server [!]
         this.server = restify.createServer();
         this.server.use(restify.plugins.queryParser());
         this.serverStartTime = Date.now();
@@ -71,23 +86,30 @@ class HLSRecorder extends EventEmitter {
             if (req.params.file.match(/master.m3u8/)) {
                 yield (0, handlers_1._handleMasterManifest)(req, res, next, this.masterManifest);
             }
-            else if ((m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/))) {
+            else if ((m = req.params.file.match(/master(\d+).m3u8/))) {
                 req.params[0] = m[1];
-                req.params[1] = m[2];
                 let data = {
-                    bw: m[1],
-                    mseq: 1,
+                    mseq: this.prevMediaSeq,
                     targetDuration: this.recorderM3U8TargetDuration,
                     allSegments: this.segments,
                 };
+                if (this.discontinuitySequence) {
+                    data.dseq = this.discontinuitySequence;
+                }
                 yield (0, handlers_1._handleMediaManifest)(req, res, next, data);
             }
-            else if ((m = req.params.file.match(/master-(\S+)_(\S+).m3u8;session=(.*)$/))) {
-                // NOT READY...
+            else if ((m = req.params.file.match(/master-(\S+)_(\S+).m3u8/))) {
                 req.params[0] = m[1];
                 req.params[1] = m[2];
-                req.params[2] = m[3];
-                //await this._handleAudioManifest(req, res, next);
+                let data = {
+                    mseq: this.prevMediaSeq,
+                    targetDuration: this.recorderM3U8TargetDuration,
+                    allSegments: this.segments,
+                };
+                if (this.discontinuitySequence) {
+                    data.dseq = this.discontinuitySequence;
+                }
+                yield (0, handlers_1._handleAudioManifest)(req, res, next, data);
             }
         });
         this.server.get("/", (req, res, next) => {
@@ -103,13 +125,16 @@ class HLSRecorder extends EventEmitter {
             yield handleMasterRoute(req, res, next);
         }));
     }
-    // Public Functions
+    // ----------------------
+    // -= Public functions =-
+    // ----------------------
     start() {
         this.server.listen(this.port, () => {
             debug("%s listening at %s", this.server.name, this.server.url);
         });
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
+                // Try to require manifest at set interval
                 yield this.startPlayhead();
                 resolve("Success");
             }
@@ -120,9 +145,9 @@ class HLSRecorder extends EventEmitter {
     }
     startPlayhead() {
         return __awaiter(this, void 0, void 0, function* () {
-            // Pre-load (maybe skip this? need to test more)
+            // Pre-load
             yield this._loadAllManifest();
-            debug(`Playhead consumer started`);
+            debug(`Playhead started`);
             this.playheadState = 1 /* RUNNING */;
             while (this.playheadState !== 3 /* CRASHED */) {
                 try {
@@ -132,7 +157,7 @@ class HLSRecorder extends EventEmitter {
                         continue;
                     }
                     if (this.playheadState === 2 /* STOPPED */) {
-                        debug(`[]: Stopping playhead`);
+                        debug(`Stopping playhead`);
                         return;
                     }
                     // Let the playhead move at an interval set according to top segment duration
@@ -163,7 +188,7 @@ class HLSRecorder extends EventEmitter {
                     let tickInterval = 0;
                     tickInterval = segmentDurationMs - (tsIncrementEnd - tsIncrementBegin);
                     tickInterval = tickInterval < 2 ? 2 : tickInterval;
-                    console.log(`Playhead going to ping again after ${tickInterval}ms`);
+                    debug(`Playhead going to ping again after ${tickInterval}ms`);
                     yield timer(tickInterval);
                 }
                 catch (err) {
@@ -175,13 +200,38 @@ class HLSRecorder extends EventEmitter {
         });
     }
     stopPlayhead() {
-        debug(`[]: Stopping playhead consumer`);
+        debug(`Initialize Stopping of Playhead.`);
         this.playheadState = 2 /* STOPPED */;
     }
-    // Private functions
-    //----------------------------------------
-    // TODO: Parse and Store from live URI
-    //----------------------------------------
+    createMediaM3U8(bw, segments) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let data = {
+                mseq: this.prevMediaSeq,
+                targetDuration: this.recorderM3U8TargetDuration,
+                allSegments: segments,
+            };
+            if (this.discontinuitySequence) {
+                data.dseq = this.discontinuitySequence;
+            }
+            return yield (0, manifest_generator_1.GenerateMediaM3U8)(bw, data);
+        });
+    }
+    createAudioM3U8(group, lang, segments) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let data = {
+                mseq: this.prevMediaSeq,
+                targetDuration: this.recorderM3U8TargetDuration,
+                allSegments: segments,
+            };
+            if (this.discontinuitySequence) {
+                data.dseq = this.discontinuitySequence;
+            }
+            return yield (0, manifest_generator_1.GenerateAudioM3U8)(group, lang, data);
+        });
+    }
+    // -----------------------
+    // -= Private functions =-
+    // -----------------------
     _loadAllManifest() {
         return __awaiter(this, void 0, void 0, function* () {
             try {
@@ -202,35 +252,51 @@ class HLSRecorder extends EventEmitter {
                 let firstMseq = this.segments["video"][Object.keys(this.segments["video"])[0]].mediaSeq;
                 if (firstMseq > this.prevSourceMediaSeq) {
                     this.prevSourceMediaSeq = firstMseq;
-                    this.emit("mseq-increment", { mseq: this.prevSourceMediaSeq });
+                    this.emit("mseq-increment", { allPlaylistSegments: this.segments });
                 }
             }
             catch (err) {
-                console.log("HELLO..");
+                debug("Error when loading all manifests!", err);
                 return Promise.reject(err);
             }
-        });
-    }
-    _getLiveManifests() {
-        return __awaiter(this, void 0, void 0, function* () {
-            // TODO: . . . use 'node-fetch' on True Live stream
         });
     }
     _getEngineManifests() {
         return __awaiter(this, void 0, void 0, function* () {
             const channelId = "1";
             try {
-                if (this.masterManifest === "") {
-                    this.masterManifest = yield this.engine.getMasterManifest(channelId);
+                if (this.sourceMasterManifest === "") {
+                    this.sourceMasterManifest = yield this.engine.getMasterManifest(channelId);
+                    this.masterManifest = this.sourceMasterManifest;
                 }
                 this.mediaManifests = yield this.engine.getMediaManifests(channelId);
                 this.audioManifests = yield this.engine.getAudioManifests(channelId);
             }
             catch (err) {
-                console.error("Error: Issue retrieving manifests from engine!", err);
+                debug("Error: Issue retrieving manifests from engine!", err);
             }
         });
     }
+    // **NOT COMPLETED**
+    _getLiveManifests() {
+        return __awaiter(this, void 0, void 0, function* () {
+            // Try to set Live URI
+            try {
+                if (this.sourceMasterManifest === "") {
+                    this.masterManifest = yield this._rewritePlaylistURLs(this.sourceMasterManifest);
+                }
+                debug(`Going to fetch Live Master Manifest!`);
+                // Load & Parse all Media Manifest URIs from Master
+                this.livePlaylistUris = yield this._fetchAndParseMasterManifest(this.liveMasterUri);
+                return;
+            }
+            catch (err) {
+                this.liveMasterUri = null;
+                debug(`Failed to fetch Live Master Manifest! ${err}`);
+            }
+        });
+    }
+    // -= M3U8 Load & Parser Functions =-
     _loadM3u8Segments() {
         return __awaiter(this, void 0, void 0, function* () {
             let loadMediaPromises = [];
@@ -270,6 +336,9 @@ class HLSRecorder extends EventEmitter {
                     let startIdx = 0;
                     let currentMediaSeq = m3u.get("mediaSequence");
                     this.recorderM3U8TargetDuration = m3u.get("targetDuration");
+                    if (m3u.get("discontinuitySequence")) {
+                        this.discontinuitySequence = m3u.get("discontinuitySequence");
+                    }
                     // Compare mseq counts
                     if (this.segments["video"][bw] && this.segments["video"][bw].mediaSeq) {
                         let storedMseq = this.segments["video"][bw].mediaSeq;
@@ -294,10 +363,10 @@ class HLSRecorder extends EventEmitter {
                         // Push new segment
                         let segment = this._playlistItemToSegment(playlistItem, i);
                         this.segments["video"][bw].segList.push(segment);
-                        //debug(`Pushed a new Segment! bw=${bw}`)
                         // Update current window size (seconds). Only needed for 1 profile.
                         if (bw === parseInt(Object.keys(this.segments["video"])[0])) {
                             if (this.targetWindowSize !== -1) {
+                                // TODO: when window is large enough start shifting segments from list.
                                 this.currentWindowSize += !segment.duration
                                     ? 0
                                     : segment.duration;
@@ -421,6 +490,59 @@ class HLSRecorder extends EventEmitter {
         };
         return segment;
     }
+    _rewritePlaylistURLs(sourceMasterManifest) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const parser = m3u8.createStream();
+            str2stream(sourceMasterManifest).pipe(parser);
+            return new Promise((resolve, reject) => {
+                parser.on("m3u", (m3u) => {
+                    let newPlaylistUri = "";
+                    for (let i = 0; i < m3u.items.StreamItem.length; i++) {
+                        const streamItem = m3u.items.StreamItem[i];
+                        if (streamItem.get("bandwidth")) {
+                            if (streamItem.attributes.attributes["audio"]) {
+                                let audioStreamItem = m3u.items.MediaItem.find((mediaItem) => {
+                                    if (mediaItem.get("type") === "AUDIO" &&
+                                        mediaItem.get("uri") === streamItem.get("uri")) {
+                                        return mediaItem;
+                                    }
+                                });
+                                if (audioStreamItem) {
+                                    let group = audioStreamItem.attributes.attributes["group-id"];
+                                    let lang = audioStreamItem.attributes.attributes["language"];
+                                    newPlaylistUri = `master-${group}_${lang}.m3u8`;
+                                    streamItem.set("uri", newPlaylistUri);
+                                }
+                                else {
+                                    let streamItemBw = streamItem.get("bandwidth");
+                                    newPlaylistUri = `master-blaster-${streamItemBw}.m3u8`;
+                                    streamItem.set("uri", newPlaylistUri);
+                                }
+                            }
+                            else {
+                                let streamItemBw = streamItem.get("bandwidth");
+                                newPlaylistUri = `master-blaster-${streamItemBw}.m3u8`;
+                                streamItem.set("uri", newPlaylistUri);
+                            }
+                        }
+                    }
+                    for (let i = 0; i < m3u.items.MediaItem.length; i++) {
+                        const mediaItem = m3u.items.MediaItem[i];
+                        if (mediaItem.get("type") === "AUDIO") {
+                            let group = mediaItem.attributes.attributes["group-id"];
+                            let lang = mediaItem.attributes.attributes["language"];
+                            newPlaylistUri = `master-${group}_${lang}.m3u8`;
+                            mediaItem.set("uri", newPlaylistUri);
+                        }
+                    }
+                    resolve(m3u.toString());
+                });
+                parser.on("error", (exc) => {
+                    reject(exc);
+                });
+            });
+        });
+    }
     _addEndlistTag() {
         return __awaiter(this, void 0, void 0, function* () {
             return new Promise((resolve, reject) => {
@@ -452,6 +574,173 @@ class HLSRecorder extends EventEmitter {
                     debug(`Error when adding Endlist tag! ${err}`);
                     reject(err);
                 }
+            });
+        });
+    }
+    //-----------------------
+    // URI Fetch Functions
+    //-----------------------
+    /**
+     * _fetchAndParseMasterManifest(string)
+     * TODO: _fetchAndParseMediaManifest(string)
+     * TODO: _loadMediaManifest(number)
+     */
+    _fetchAndParseMasterManifest(masterURI) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (masterURI === null) {
+                throw new Error(`No master manifest URI provided`);
+            }
+            const playlistURIs = {
+                video: {},
+                audio: {},
+            };
+            const parser = m3u8.createStream();
+            const controller = new AbortController();
+            const timeout = setTimeout(() => {
+                debug(`Request Timeout! Aborting Request to ${masterURI}`);
+                controller.abort();
+            }, FAIL_TIMEOUT);
+            const response = yield urlFetch(masterURI, { signal: controller.signal });
+            try {
+                response.body.pipe(parser);
+            }
+            catch (err) {
+                debug(`Error when piping response to parser! ${JSON.stringify(err)}`);
+                return Promise.reject(err);
+            }
+            finally {
+                clearTimeout(timeout);
+            }
+            return new Promise((resolve, reject) => {
+                parser.on("m3u", (m3u) => {
+                    debug(`Fetched a New Live Master Manifest from:\n${masterURI}`);
+                    let baseUrl = "";
+                    const m = masterURI.match(/^(.*)\/.*?$/);
+                    if (m) {
+                        baseUrl = m[1] + "/";
+                    }
+                    // Get all Profile manifest URIs in the Live Master Manifest
+                    for (let i = 0; i < m3u.items.StreamItem.length; i++) {
+                        const streamItem = m3u.items.StreamItem[i];
+                        const streamItemBW = streamItem.get("bandwidth");
+                        const mediaManifestUri = url.resolve(baseUrl, streamItem.get("uri"));
+                        playlistURIs["video"][streamItemBW] = "";
+                        playlistURIs["video"][streamItemBW] = mediaManifestUri;
+                    }
+                    // TODO: support Live source with Demuxed Audio
+                    debug(`All Live Media Manifest URIs have been collected. (${Object.keys(playlistURIs).length}) profiles found!`);
+                    resolve(playlistURIs);
+                    parser.on("error", (exc) => {
+                        debug(`Parser Error: ${JSON.stringify(exc)}`);
+                        reject(exc);
+                    });
+                });
+            });
+        });
+    }
+    _fetchAndParseMediaManifest(mediaURI) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let FETCH_ATTEMPTS = 10;
+            while (FETCH_ATTEMPTS > 0) {
+                // Reset Values Each Attempt
+                let livePromises = [];
+                let resultsList = [];
+                let playlistAmount = Object.keys(this.playlistURIs["video"]).length;
+                try {
+                    // Collect Live Source Requesting Promises
+                    for (let i = 0; i < playlistAmount; i++) {
+                        let bw = Object.keys(this.playlistURIs["video"])[i];
+                        livePromises.push(this._loadMediaManifest(parseInt(bw)));
+                        debug(`Pushed loadMedia promise for bw=[${bw}]`);
+                    }
+                    // Fetch From Live Source
+                    debug(`Executing Promises I: Fetch From Live Source`);
+                    resultsList = yield Promise.allSettled(livePromises);
+                    livePromises = [];
+                }
+                catch (err) {
+                    debug(`[${this.sessionId}]: Promises I: FAILURE!\n${err}`);
+                    return;
+                }
+                // Handle if any promise got rejected
+                if (resultsList.some((result) => result.status === "rejected")) {
+                    debug(`[${this.sessionId}]: ALERT! Promises I: Failed, Rejection Found! Trying again...`);
+                    continue;
+                }
+                const allMediaSeqCounts = resultsList.map((item) => {
+                    if (item.status === "rejected") {
+                        return -1;
+                    }
+                    return item.value.properties.mediaSequence;
+                });
+                // Handle if mediaSeqCounts are NOT synced up!
+                if (!allMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
+                    debug(`[${this.sessionId}]: Live Mseq counts=[${allMediaSeqCounts}]`);
+                    // Decrement fetch counter
+                    FETCH_ATTEMPTS--;
+                    // Wait a little before trying again
+                    debug(`[${this.sessionId}]: ALERT! Live Source Data NOT in sync! Will try again after 1500ms`);
+                    yield timer(1500);
+                    this.timerCompensation = false;
+                    continue;
+                }
+                if (FETCH_ATTEMPTS === 0) {
+                    debug(`[${this.sessionId}]: Fetching from Live-Source did not work! Returning to Playhead Loop...`);
+                    return;
+                }
+                if (this.allowedToSet) {
+                    // Collect and Push Segment-Extracting Promises
+                    let pushPromises = [];
+                    for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
+                        let bw = Object.keys(this.mediaManifestURIs)[i];
+                        pushPromises.push(this._parseMediaManifest(this.liveSourceM3Us[bw].M3U, bw, this.mediaManifestURIs[bw], bw));
+                        //debug(`[${this.sessionId}]: Pushed pushPromise for bw=${bw}`);
+                    }
+                    // Segment Pushing
+                    debug(`[${this.sessionId}]: Executing Promises II: Segment Pushing`);
+                    yield Promise.all(pushPromises);
+                }
+            }
+        });
+    }
+    //TODO: Continue here!
+    _loadMediaManifest(bw) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // Get the target media manifest
+            const mediaManifestUri = this.playlistURIs["video"][bw];
+            const parser = m3u8.createStream();
+            const controller = new AbortController();
+            const timeout = setTimeout(() => {
+                debug(`[${this.sessionId}]: Request Timeout! Aborting Request to ${mediaManifestUri}`);
+                controller.abort();
+            }, FAIL_TIMEOUT);
+            const response = yield urlFetch(mediaManifestUri, {
+                signal: controller.signal,
+            });
+            try {
+                response.body.pipe(parser);
+            }
+            catch (err) {
+                debug(`Error when piping response to parser! ${JSON.stringify(err)}`);
+                return Promise.reject(err);
+            }
+            finally {
+                clearTimeout(timeout);
+            }
+            return new Promise((resolve, reject) => {
+                parser.on("m3u", (m3u) => {
+                    try {
+                        resolve(m3u);
+                    }
+                    catch (exc) {
+                        debug(`[${this.sessionId}]: Error when parsing latest manifest`);
+                        reject(exc);
+                    }
+                });
+                parser.on("error", (exc) => {
+                    debug(`Parser Error: ${JSON.stringify(exc)}`);
+                    reject(exc);
+                });
             });
         });
     }
