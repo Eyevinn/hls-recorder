@@ -313,6 +313,9 @@ export class HLSRecorder extends EventEmitter {
     this.playheadState = PlayheadState.STOPPED as PlayheadState;
   }
 
+  async getMasterM3U8() {
+    return this.masterManifest;
+  }
     
   async createMediaM3U8(bw: number, segments: ISegments) {
     let data: IRecData = {
