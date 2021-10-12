@@ -222,15 +222,18 @@ export class HLSRecorder extends EventEmitter {
   // ----------------------
   // -= Public functions =-
   // ----------------------
-  start() {
+  listen() {
     this.server.listen(this.port, () => {
       debug("%s listening at %s", this.server.name, this.server.url);
     });
+  }
 
+  start() {
     return new Promise<string>(async (resolve, reject) => {
       try {
         if (this.engine) {
           this.engine.start();
+          await timer(3000);
         }
         // Try to require manifest at set interval
         await this.startPlayhead();

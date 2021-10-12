@@ -7,14 +7,12 @@
     "build": "tsc --project ./",
     "postversion": "git push && git push --tags",
     "coverage": "nyc npm test && nyc report",
-    "dev-start": " node dist/test-server.js",
     "test": "echo \"WARN: no test specified\" && exit 0"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^16.10.3",
-    "eyevinn-channel-engine": "^3.0.0",
     "nyc": "^15.1.0",
     "typescript": "^4.4.3"
   },
