@@ -9,6 +9,7 @@
     "coverage": "nyc npm test && nyc report",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev-start": " node dist/test-server.js"
+
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "license": "MIT",
