@@ -12,7 +12,7 @@
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Eyevinn/hls-recorder.git",
+    "url": "git+https://github.com/Eyevinn/hls-recorder.git"
   },
   "license": "MIT",
   "devDependencies": {
