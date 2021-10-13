@@ -10,6 +10,10 @@
     "test": "echo \"WARN: no test specified\" && exit 0"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eyevinn/hls-recorder.git",
+  },
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^16.10.3",
