@@ -1,9 +1,8 @@
 const EventEmitter = require("events").EventEmitter;
 const m3u8 = require("@eyevinn/m3u8");
 const str2stream = require("string-to-stream");
-const debug = require("debug")("recorder");
+const debug = require("debug")("hls-recorder");
 const restify = require("restify");
-const errs = require("restify-errors");
 const url = require("url");
 const urlFetch = require("node-fetch");
 const { AbortController } = require("abort-controller");
@@ -27,7 +26,7 @@ interface IRecorderOptions {
   vod?: boolean; // end event by adding a endlist tag
 }
 
-type Segment = {
+export type Segment = {
   index: number | null;
   duration: number | null;
   uri: string | null;
@@ -294,6 +293,7 @@ export class HLSRecorder extends EventEmitter {
           );
           if (this.addEndTag) {
             await this._addEndlistTag();
+            this.emit("mseq-increment", { allPlaylistSegments: this.segments });
           }
           this.stopPlayhead();
         }
@@ -320,9 +320,10 @@ export class HLSRecorder extends EventEmitter {
   }
 
   async getMasterM3U8() {
+    debug(`Master Manifest Requested`);
     return this.masterManifest;
   }
-    
+
   async createMediaM3U8(bw: number, segments: ISegments) {
     let data: IRecData = {
       mseq: this.prevMediaSeq,
@@ -401,7 +402,9 @@ export class HLSRecorder extends EventEmitter {
     // Try to set Live URI
     try {
       if (this.sourceMasterManifest === "") {
-        this.masterManifest = await this._rewritePlaylistURLs(this.sourceMasterManifest);
+        this.masterManifest = await this._rewritePlaylistURLs(
+          this.sourceMasterManifest
+        );
       }
       debug(`Going to fetch Live Master Manifest!`);
       // Load & Parse all Media Manifest URIs from Master
@@ -483,8 +486,9 @@ export class HLSRecorder extends EventEmitter {
               segList: [],
             };
           }
+          let segIdx = this.segments["video"][bw].segList.length + 1;
           // Push new segment
-          let segment = this._playlistItemToSegment(playlistItem, i);
+          let segment = this._playlistItemToSegment(playlistItem, segIdx);
           this.segments["video"][bw].segList.push(segment);
           // Update current window size (seconds). Only needed for 1 profile.
           if (bw === parseInt(Object.keys(this.segments["video"])[0])) {
@@ -532,9 +536,9 @@ export class HLSRecorder extends EventEmitter {
             this.segments["audio"][audioGroup][audioLanguage].mediaSeq;
           let mseqDiff = currentMediaSeq - storedMseq;
           startIdx =
-            m3u.items.PlaylistItem.length - 1 - mseqDiff < 0
+            m3u.items.PlaylistItem.length - mseqDiff < 0
               ? 0
-              : m3u.items.PlaylistItem.length - 1 - mseqDiff;
+              : m3u.items.PlaylistItem.length - mseqDiff;
           // Update stored mseq
           this.segments["audio"][audioGroup][audioLanguage].mediaSeq =
             currentMediaSeq;
@@ -553,8 +557,11 @@ export class HLSRecorder extends EventEmitter {
               segList: [],
             };
           }
+          let segIdx =
+            this.segments["audio"][audioGroup][audioLanguage].segList.length +
+            1;
           // Push new segment
-          let audioSegment = this._playlistItemToSegment(playlistItem, i);
+          let audioSegment = this._playlistItemToSegment(playlistItem, segIdx);
           this.segments["audio"][audioGroup][audioLanguage].segList.push(
             audioSegment
           );

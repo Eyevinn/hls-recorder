@@ -1,5 +1,5 @@
 import { IRecData } from "./handlers";
-const debug = require("debug")("recorder-m3u8generator");
+const debug = require("debug")("hls-recorder");
 
 export async function GenerateMediaM3U8(
   BW: number,
@@ -9,12 +9,12 @@ export async function GenerateMediaM3U8(
     throw new Error("No bandwidth provided");
   }
 
-  debug(`Client requesting manifest for bw=(${BW})`);
+  debug(`[m3u8generator]: Client requesting manifest for bw=(${BW})`);
 
   //  DO NOT GENERATE MANIFEST CASE: Not yet started gathering segs of all variants.
   if (Object.keys(OPTIONS.allSegments["video"]).length === 0) {
     debug(
-      `Cannot Generate Manifest! Not yet collected ANY segments from Source...`
+      `[m3u8generator]: Cannot Generate Manifest! Not yet collected ANY segments from Source...`
     );
     return null;
   }
@@ -26,13 +26,15 @@ export async function GenerateMediaM3U8(
     );
     if (!segAmounts.every((val, i, arr) => val === arr[0])) {
       debug(
-        `Cannot Generate Manifest! Not yet collected ALL segments from Source...`
+        `[m3u8generator]: Cannot Generate Manifest! Not yet collected ALL segments from Source...`
       );
       return null;
     }
   }
 
-  debug(`Started Generating the Manifest with Mseq:[${OPTIONS.mseq}]...`);
+  debug(
+    `[m3u8generator]: Started Generating the Manifest with Mseq:[${OPTIONS.mseq}]...`
+  );
 
   let m3u8 = "#EXTM3U\n";
   m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
@@ -101,7 +103,7 @@ export async function GenerateMediaM3U8(
       m3u8 += seg.uri + "\n";
     }
   }
-  debug(`Manifest Generation Complete!`);
+  debug(`[m3u8generator]: Manifest Generation Complete!`);
   return m3u8;
 }
 
@@ -118,11 +120,13 @@ export async function GenerateAudioM3U8(
     );
   }
 
-  debug(`Client requesting manifest for audio track=(${GROUP}_${LANG})`);
+  debug(
+    `[m3u8generator]: Client requesting manifest for audio track=(${GROUP}_${LANG})`
+  );
   //  DO NOT GENERATE MANIFEST CASE: Not yet started gathering segs of all variants.
   if (Object.keys(OPTIONS.allSegments["audio"]).length === 0) {
     debug(
-      `Cannot Generate Manifest! Not yet collected ANY segments from Source...`
+      `[m3u8generator]: Cannot Generate Manifest! Not yet collected ANY segments from Source...`
     );
     return null;
   }
@@ -135,14 +139,16 @@ export async function GenerateAudioM3U8(
       );
       if (!segAmounts.every((val, i, arr) => val === arr[0])) {
         debug(
-          `Cannot Generate Manifest! Not yet collected ALL segments from Source...`
+          `[m3u8generator]: Cannot Generate Manifest! Not yet collected ALL segments from Source...`
         );
         return null;
       }
     }
   }
 
-  debug(`Started Generating the Manifest with Mseq:[${OPTIONS.mseq}]...`);
+  debug(
+    `[m3u8generator]: Started Generating the Manifest with Mseq:[${OPTIONS.mseq}]...`
+  );
 
   let m3u8 = "#EXTM3U\n";
   m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
@@ -216,7 +222,7 @@ export async function GenerateAudioM3U8(
       m3u8 += seg.uri + "\n";
     }
   }
-  debug(`Manifest Generation Complete!`);
+  debug(`[m3u8generator]: Manifest Generation Complete!`);
   return m3u8;
 }
 
