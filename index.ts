@@ -264,8 +264,8 @@ export class HLSRecorder extends EventEmitter {
         let segmentDurationMs: any = 6000;
         let videoBws = Object.keys(this.segments["video"]);
         if (
-          !videoBws.length &&
-          !this.segments["video"][videoBws[0]].segList.length &&
+          videoBws.length > 0 &&
+          this.segments["video"][videoBws[0]].segList.length > 0 &&
           this.segments["video"][videoBws[0]].segList[0].duration
         ) {
           segmentDurationMs =
