@@ -10,22 +10,70 @@ Node library for recording HLS Live
 npm install --save @eyevinn/hls-recorder
 ```
 
-## Usage
+## Usage (with Eyevinn Channel Engine)
 
 ```
 const HLSRecorder = require("@eyevinn/hls-recorder");
+const ChannelEngine = require("eyevinn-channel-engine");
 
+/*
+  For instructions on how to properly set up a channel engine, see:
+  https://www.npmjs.com/package/eyevinn-channel-engine
+*/
+
+// First set up your channel engine instance
+const assetMgr = new YourAssetManager();
+const channelMgr = new YourChannelManager();
+
+const engineOptions = {
+  heartbeat: '/',
+  channelManager: channelMgr
+}
+
+const engine = new ChannelEngine(assetMgr, engineOptions);
+
+// Then use the instance as first input argument in HLSRecorder instance
 const opts = {
+  recordDuration: 4000 // seconds (-1 for infinite)
   windowSize: 3600 // seconds (-1 for infinite)
   vod: true // insert EXT-X-ENDLIST on end (creating a VOD)
 };
-const recorder = new HLSRecorder(opts);
+const recorder = new HLSRecorder(engine, opts);
 
 recorder.on("mseq-increment", mseq => {
   // Do stuff with media seq
 });
 
-recorder.start();
+recorder.listen(); // Have server listening on default port 8001
+
+recorder.start(); // Start recording VOD2live stream
+
+// View Recorder Stream Playback at: "http://localhost:8001/live/master.m3u8"
+```
+
+## Usage (with HLS Live Stream URL) - COMING SOON
+
+```
+const HLSRecorder = require("@eyevinn/hls-recorder");
+
+const source = "https://true.live.stream/hls/master.m3u8"
+
+const opts = {
+  recordDuration: 4000 // seconds (-1 for infinite)
+  windowSize: 3600 // seconds (-1 for infinite)
+  vod: true // insert EXT-X-ENDLIST on end (creating a VOD)
+};
+const recorder = new HLSRecorder(source, opts);
+
+recorder.on("mseq-increment", mseq => {
+  // Do stuff with media seq
+});
+
+recorder.listen(); // Have server listening on default port 8001
+
+recorder.start(); // Start recording live stream
+
+// View Recorder Stream Playback at: "http://localhost:8001/live/master.m3u8"
 ```
 
 # License (MIT)
