@@ -122,6 +122,7 @@ export class HLSRecorder extends EventEmitter {
   recorderM3U8TargetDuration: number;
   liveMasterUri: string | null;
   livePlaylistUris: IPlaylists | null;
+  sourcePlaylistIsVOD: boolean;
   engine: any; // todo channel engine type defs
 
   constructor(source: any, opts: IRecorderOptions) {
@@ -130,7 +131,7 @@ export class HLSRecorder extends EventEmitter {
     this.targetRecordDuration = opts.recordDuration ? opts.recordDuration : -1;
     this.addEndTag = opts.vod ? opts.vod : false;
     if (typeof source === "string") {
-      if (source.match(/master.m3u8/)) {
+      if (source.match(/.m3u8/)) {
         this.liveMasterUri = source;
         this.livePlaylistUris = {
           video: {},
@@ -157,6 +158,7 @@ export class HLSRecorder extends EventEmitter {
     this.sourceMasterManifest = "";
     this.sourceMediaManifestURIs = {};
     this.sourceAudioManifestURIs = {};
+    this.sourcePlaylistIsVOD = false;
 
     this.masterManifest = "";
     this.mediaManifests = {};
@@ -285,7 +287,7 @@ export class HLSRecorder extends EventEmitter {
         await this._loadAllManifest();
         const tsIncrementEnd = Date.now();
 
-        // Is the Event over?
+        // Is the Event over Case 1?
         if (
           this.targetRecordDuration !== -1 &&
           this.currentRecordDuration >= this.targetRecordDuration
@@ -297,10 +299,21 @@ export class HLSRecorder extends EventEmitter {
               this.addEndTag ? "and creating a VOD..." : ""
             }`
           );
-          if (this.addEndTag) {
+          console.log("this.sourcePlaylistIsVOD=", this.sourcePlaylistIsVOD);
+          if (this.sourcePlaylistIsVOD || this.addEndTag) {
             await this._addEndlistTag();
             this.emit("mseq-increment", { allPlaylistSegments: this.segments });
           }
+          this.stopPlayhead();
+        }
+        // Is the Event over Case 2?
+        if (this.sourcePlaylistIsVOD) {
+          debug(
+            `Source has become a VOD. And RealTime Config is fasle.\nStopping Playhead and creating a VOD..."
+            `
+          );
+          await this._addEndlistTag();
+          this.emit("mseq-increment", { allPlaylistSegments: this.segments });
           this.stopPlayhead();
         }
 
@@ -545,7 +558,6 @@ export class HLSRecorder extends EventEmitter {
       parser.on("m3u", (m3u: any) => {
         let startIdx = 0;
         let currentMediaSeq = m3u.get("mediaSequence");
-
         // Compare mseq counts
         if (
           this.segments["audio"][audioGroup] &&
@@ -920,9 +932,6 @@ export class HLSRecorder extends EventEmitter {
         }
         return item.value.mediaSequence;
       });
-
-      debug("Nope?");
-
       // Handle if mediaSeqCounts are NOT synced up!
       if (!allMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
         debug(`Live Mseq counts=[${allMediaSeqCounts}]`);
@@ -967,6 +976,13 @@ export class HLSRecorder extends EventEmitter {
       signal: controller.signal,
     });
     try {
+      // CHECK if manifest already has endlist tag
+      let response2 = response.clone();
+      let resAsText = await response2.text();
+      if (resAsText.includes("#EXT-X-ENDLIST")) {
+        console.log("TRUE WE SHOULD ADD ENDLIST TAG #33333");
+        this.sourcePlaylistIsVOD = true;
+      }
       response.body.pipe(parser);
     } catch (err) {
       debug(`Error when piping response to parser! ${JSON.stringify(err)}`);
@@ -975,7 +991,7 @@ export class HLSRecorder extends EventEmitter {
       clearTimeout(timeout);
     }
     return new Promise((resolve, reject) => {
-      parser.on("m3u", (m3u: m3u) => {
+      parser.on("m3u", async (m3u: m3u) => {
         try {
           const result: FetchResult = {
             m3u: m3u.toString(),
