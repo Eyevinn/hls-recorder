@@ -1002,7 +1002,7 @@ export class HLSRecorder extends EventEmitter {
       clearTimeout(timeout);
     }
     return new Promise((resolve, reject) => {
-      parser.on("m3u", async (m3u: m3u) => {
+      parser.on("m3u", (m3u: m3u) => {
         try {
           const result: FetchResult = {
             m3u: m3u.toString(),
