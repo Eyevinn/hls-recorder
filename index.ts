@@ -2,6 +2,7 @@ const EventEmitter = require("events").EventEmitter;
 const m3u8 = require("@eyevinn/m3u8");
 const str2stream = require("string-to-stream");
 const debug = require("debug")("hls-recorder");
+const allSettled = require("promise.allsettled");
 const restify = require("restify");
 const url = require("url");
 const urlFetch = require("node-fetch");
@@ -921,7 +922,7 @@ export class HLSRecorder extends EventEmitter {
 
         // Fetch From Live Source
         debug(`Executing Promises I: Fetch From Live Source`);
-        resultsList = await Promise.allSettled(livePromises);
+        resultsList = await allSettled(livePromises);
         livePromises = [];
       } catch (err) {
         debug(`Promises I: FAILURE!\n${err}`);
