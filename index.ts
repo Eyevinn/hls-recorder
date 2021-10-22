@@ -282,7 +282,7 @@ export class HLSRecorder extends EventEmitter {
         // Is the Event over Case 2?
         if (this.sourcePlaylistIsVOD) {
           debug(
-            "Source has become a VOD. And vodRealTime Config is fasle.",
+            "Source has become a VOD. And vodRealTime Config is false.",
             "Procceeding to stop Playhead and create a VOD..."
           );
           this._addEndlistTag();
