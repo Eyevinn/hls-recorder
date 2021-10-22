@@ -20,7 +20,7 @@ import {
 
 const timer = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-interface IRecorderOptions {
+export interface IRecorderOptions {
   recordDuration?: number; // how long in seconds before ending event-stream
   windowSize?: number; // sliding window size
   vod?: boolean; // end event by adding a endlist tag
@@ -256,8 +256,7 @@ export class HLSRecorder extends EventEmitter {
     debug("Stopping HLS Recorder");
     if (this.sourcePlaylistIsVOD) {
       debug(
-        `Stopping Playhead, creating a VOD, and shutting down the server..."
-        `
+        `Stopping Playhead, creating a VOD, and shutting down the server...`
       );
       this._addEndlistTag();
       this.emit("mseq-increment", { allPlaylistSegments: this.segments });
@@ -283,7 +282,7 @@ export class HLSRecorder extends EventEmitter {
         // Is the Event over Case 2?
         if (this.sourcePlaylistIsVOD) {
           debug(
-            "Source has become a VOD. And RealTime Config is fasle.",
+            "Source has become a VOD. And vodRealTime Config is fasle.",
             "Procceeding to stop Playhead and create a VOD..."
           );
           this._addEndlistTag();
