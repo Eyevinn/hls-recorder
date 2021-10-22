@@ -24,7 +24,7 @@ interface IRecorderOptions {
   recordDuration?: number; // how long in seconds before ending event-stream
   windowSize?: number; // sliding window size
   vod?: boolean; // end event by adding a endlist tag
-  vodRealTime?: boolean // If source is VOD add to recorder manifest in realTime.
+  vodRealTime?: boolean; // If source is VOD add to recorder manifest in realTime.
 }
 
 export type Segment = {
@@ -252,6 +252,22 @@ export class HLSRecorder extends EventEmitter {
     });
   }
 
+  stop() {
+    debug("Stopping HLS Recorder");
+    if (this.sourcePlaylistIsVOD) {
+      debug(
+        `Stopping Playhead, creating a VOD, and shutting down the server..."
+        `
+      );
+      this._addEndlistTag();
+      this.emit("mseq-increment", { allPlaylistSegments: this.segments });
+      this.stopPlayhead();
+      this.sourcePlaylistIsVOD = false;
+    }
+    this.server.close();
+    debug(`Server Closed! [${new Date().toISOString()}]`);
+  }
+
   async startPlayhead(): Promise<void> {
     // Pre-load
     await this._loadAllManifest();
@@ -264,7 +280,17 @@ export class HLSRecorder extends EventEmitter {
           await timer(3000);
           continue;
         }
-
+        // Is the Event over Case 2?
+        if (this.sourcePlaylistIsVOD) {
+          debug(
+            "Source has become a VOD. And RealTime Config is fasle.",
+            "Procceeding to stop Playhead and create a VOD..."
+          );
+          this._addEndlistTag();
+          this.emit("mseq-increment", { allPlaylistSegments: this.segments });
+          this.stopPlayhead();
+          this.sourcePlaylistIsVOD = false;
+        }
         if (this.playheadState === (PlayheadState.STOPPED as PlayheadState)) {
           debug(`Stopping playhead`);
           return;
@@ -300,21 +326,10 @@ export class HLSRecorder extends EventEmitter {
               this.addEndTag ? "and creating a VOD..." : ""
             }`
           );
-          console.log("this.sourcePlaylistIsVOD=", this.sourcePlaylistIsVOD);
-          if (this.sourcePlaylistIsVOD || this.addEndTag) {
-            await this._addEndlistTag();
+          if (this.addEndTag) {
+            this._addEndlistTag();
             this.emit("mseq-increment", { allPlaylistSegments: this.segments });
           }
-          this.stopPlayhead();
-        }
-        // Is the Event over Case 2?
-        if (this.sourcePlaylistIsVOD) {
-          debug(
-            `Source has become a VOD. And RealTime Config is fasle.\nStopping Playhead and creating a VOD..."
-            `
-          );
-          await this._addEndlistTag();
-          this.emit("mseq-increment", { allPlaylistSegments: this.segments });
           this.stopPlayhead();
         }
 
@@ -751,36 +766,33 @@ export class HLSRecorder extends EventEmitter {
     });
   }
 
-  async _addEndlistTag(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      try {
-        const finalSegment: Segment = {
-          index: null,
-          duration: null,
-          uri: null,
-          endlist: true,
-        };
-        // Add tag to for all media
-        const bandwidths = Object.keys(this.segments["video"]);
-        bandwidths.forEach((bw) => {
-          this.segments["video"][bw].segList.push(finalSegment);
-        });
-        // Add tag for all audio
-        const groups = Object.keys(this.segments["audio"]);
-        groups.forEach((group) => {
-          const langs = Object.keys(this.segments["audio"][group]);
-          for (let i = 0; i < langs.length; i++) {
-            let lang = langs[i];
-            this.segments["audio"][group][lang].segList.push(finalSegment);
-          }
-        });
-        debug(`Endlist tag! Added to all Media Playlists!`);
-        resolve();
-      } catch (err) {
-        debug(`Error when adding Endlist tag! ${err}`);
-        reject(err);
-      }
-    });
+  _addEndlistTag(): void {
+    try {
+      const finalSegment: Segment = {
+        index: null,
+        duration: null,
+        uri: null,
+        endlist: true,
+      };
+      // Add tag to for all media
+      const bandwidths = Object.keys(this.segments["video"]);
+      bandwidths.forEach((bw) => {
+        this.segments["video"][bw].segList.push(finalSegment);
+      });
+      // Add tag for all audio
+      const groups = Object.keys(this.segments["audio"]);
+      groups.forEach((group) => {
+        const langs = Object.keys(this.segments["audio"][group]);
+        for (let i = 0; i < langs.length; i++) {
+          let lang = langs[i];
+          this.segments["audio"][group][lang].segList.push(finalSegment);
+        }
+      });
+      debug(`Endlist tag! Added to all Media Playlists!`);
+    } catch (err) {
+      debug(`Error when adding Endlist tag! ${err}`);
+      throw new Error(JSON.stringify(err));
+    }
   }
 
   //-----------------------
