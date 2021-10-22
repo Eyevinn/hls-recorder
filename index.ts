@@ -24,6 +24,7 @@ interface IRecorderOptions {
   recordDuration?: number; // how long in seconds before ending event-stream
   windowSize?: number; // sliding window size
   vod?: boolean; // end event by adding a endlist tag
+  vodRealTime?: boolean // If source is VOD add to recorder manifest in realTime.
 }
 
 export type Segment = {
@@ -977,10 +978,9 @@ export class HLSRecorder extends EventEmitter {
     });
     try {
       // CHECK if manifest already has endlist tag
-      let response2 = response.clone();
-      let resAsText = await response2.text();
+      let responseCopy = response.clone();
+      let resAsText = await responseCopy.text();
       if (resAsText.includes("#EXT-X-ENDLIST")) {
-        console.log("TRUE WE SHOULD ADD ENDLIST TAG #33333");
         this.sourcePlaylistIsVOD = true;
       }
       response.body.pipe(parser);
