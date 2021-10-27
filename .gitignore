@@ -2,3 +2,5 @@ node_modules
 dist
 test-server.ts
 types
+.env
+tests3.js
