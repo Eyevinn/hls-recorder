@@ -297,7 +297,7 @@ export class HLSRecorder extends EventEmitter {
           return;
         }
 
-        // Is the Event over Case 2?
+        // Is the Event over Case 2
         if (this.sourcePlaylistIsVOD) {
           debug(
             "Source has become a VOD. And vodRealTime Config is false.",
