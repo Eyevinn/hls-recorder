@@ -2,6 +2,7 @@ const EventEmitter = require("events").EventEmitter;
 const m3u8 = require("@eyevinn/m3u8");
 const str2stream = require("string-to-stream");
 const debug = require("debug")("hls-recorder");
+const allSettled = require("promise.allsettled");
 const restify = require("restify");
 const url = require("url");
 const urlFetch = require("node-fetch");
@@ -234,6 +235,7 @@ export class HLSRecorder extends EventEmitter {
     this.server.listen(port, () => {
       debug("%s listening at %s", this.server.name, this.server.url);
     });
+    this.serverStarted = true;
   }
 
   start() {
@@ -253,18 +255,29 @@ export class HLSRecorder extends EventEmitter {
   }
 
   stop() {
-    debug("Stopping HLS Recorder");
-    if (this.sourcePlaylistIsVOD) {
-      debug(
-        `Stopping Playhead, creating a VOD, and shutting down the server...`
-      );
-      this._addEndlistTag();
-      this.emit("mseq-increment", { allPlaylistSegments: this.segments });
-      this.stopPlayhead();
-      this.sourcePlaylistIsVOD = false;
-    }
-    this.server.close();
-    debug(`Server Closed! [${new Date().toISOString()}]`);
+    return new Promise<string>(async (resolve, reject) => {
+      try {
+        debug("Stopping HLS Recorder");
+        if (!this.sourcePlaylistIsVOD) {
+          debug(
+            `Stopping Playhead, creating a VOD, and shutting down the server...`
+          );
+          this._addEndlistTag();
+          this.emit("mseq-increment", { allPlaylistSegments: this.segments });
+          this.stopPlayhead();
+        }
+        if (this.serverStarted) {
+          this.server.close();
+          this.serverStarted = false;
+          debug(`Server Closed! [${new Date().toISOString()}]`);
+        }
+        resolve("Success");
+      } catch (err) {
+        reject(
+          "Something went wrong stoping the recorder!: " + JSON.stringify(err)
+        );
+      }
+    });
   }
 
   async startPlayhead(): Promise<void> {
@@ -279,21 +292,22 @@ export class HLSRecorder extends EventEmitter {
           await timer(3000);
           continue;
         }
-        // Is the Event over Case 2?
+        if (this.playheadState === (PlayheadState.STOPPED as PlayheadState)) {
+          debug(`Stopping playhead`);
+          return;
+        }
+
+        // Is the Event over Case 2
         if (this.sourcePlaylistIsVOD) {
           debug(
             "Source has become a VOD. And vodRealTime Config is false.",
             "Procceeding to stop Playhead and create a VOD..."
           );
-          this._addEndlistTag();
           this.emit("mseq-increment", { allPlaylistSegments: this.segments });
           this.stopPlayhead();
-          this.sourcePlaylistIsVOD = false;
+          continue;
         }
-        if (this.playheadState === (PlayheadState.STOPPED as PlayheadState)) {
-          debug(`Stopping playhead`);
-          return;
-        }
+
         // Let the playhead move at an interval set according to top segment duration
         let segmentDurationMs: any = 6000;
         let videoBws = Object.keys(this.segments["video"]);
@@ -330,6 +344,7 @@ export class HLSRecorder extends EventEmitter {
             this.emit("mseq-increment", { allPlaylistSegments: this.segments });
           }
           this.stopPlayhead();
+          continue;
         }
 
         // Set the timer
@@ -404,7 +419,6 @@ export class HLSRecorder extends EventEmitter {
       // Prepare possible event to be emitted
       let firstMseq =
         this.segments["video"][Object.keys(this.segments["video"])[0]].mediaSeq;
-
       if (firstMseq > this.prevSourceMediaSeq) {
         this.prevSourceMediaSeq = firstMseq;
         this.emit("mseq-increment", { allPlaylistSegments: this.segments });
@@ -476,6 +490,9 @@ export class HLSRecorder extends EventEmitter {
       }
     });
     await Promise.all(loadMediaPromises.concat(loadAudioPromises));
+    if (this.sourcePlaylistIsVOD) {
+      this._addEndlistTag();
+    }
     debug(`Segment loading successful!`);
   }
 
@@ -921,7 +938,7 @@ export class HLSRecorder extends EventEmitter {
 
         // Fetch From Live Source
         debug(`Executing Promises I: Fetch From Live Source`);
-        resultsList = await Promise.allSettled(livePromises);
+        resultsList = await allSettled(livePromises);
         livePromises = [];
       } catch (err) {
         debug(`Promises I: FAILURE!\n${err}`);

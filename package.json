@@ -28,6 +28,7 @@
     "debug": "^4.3.2",
     "events": "^3.3.0",
     "node-fetch": "^2.6.5",
+    "promise.allsettled": "^1.0.5",
     "restify": "^8.6.0",
     "string-to-stream": "^3.0.1",
     "url": "^0.11.0"
