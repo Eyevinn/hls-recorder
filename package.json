@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "description": "NPM library to record live HLS",
   "main": "dist/index.js",
+  "type": "module",
   "scripts": {
     "build": "tsc --project ./",
     "dev": "node dist/test-server.js",
