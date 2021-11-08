@@ -1,14 +1,14 @@
 import { EventEmitter } from "events";
-/// <reference path="../types/@eyevinn/m3u8/index.d.ts"/>
-import m3u8 from "@eyevinn/m3u8";
 import str2stream from "string-to-stream";
 import allSettled from "promise.allsettled";
 import restify from "restify";
 import url from "url";
 import { AbortController } from "abort-controller";
-import { fetch, CookieJar } from "node-fetch-cookies";
+/// <reference path="../types/node-fetch-cookies/index.d.ts"/>
+import { fetch, CookieJar } from "./util/node-fetch-cookies/src/";
 import Debug from "debug";
 const debug = Debug("hls-recorder");
+const m3u8 = require("@eyevinn/m3u8");
 import {
   GenerateMediaM3U8,
   GenerateAudioM3U8,
@@ -262,7 +262,8 @@ export class HLSRecorder extends EventEmitter {
         await this.startPlayhead();
         resolve("Success");
       } catch (err) {
-        reject("Something went Wrong!: " + JSON.stringify(err));
+        this.emit("error", err);
+        reject("Something went Wrong!: " + new Error(JSON.stringify(err)));
       }
     });
   }
@@ -276,7 +277,10 @@ export class HLSRecorder extends EventEmitter {
             `Stopping Playhead, creating a VOD, and shutting down the server...`
           );
           this._addEndlistTag();
-          this.emit("mseq-increment", { allPlaylistSegments: this.segments });
+          this.emit("mseq-increment", {
+            allPlaylistSegments: this.segments,
+            cookie: this.cookieJar,
+          });
           this.stopPlayhead();
         }
         if (this.serverStarted) {
@@ -286,6 +290,7 @@ export class HLSRecorder extends EventEmitter {
         }
         resolve("Success");
       } catch (err) {
+        this.emit("error", err);
         reject(
           "Something went wrong stoping the recorder!: " + JSON.stringify(err)
         );
@@ -294,29 +299,40 @@ export class HLSRecorder extends EventEmitter {
   }
 
   async startPlayhead(): Promise<void> {
-    // Pre-load
-    await this._loadAllManifest();
-    debug(`Playhead started`);
+    // Init playhead state
     this.playheadState = PlayheadState.RUNNING as PlayheadState;
+
+    try {
+      // Pre-load
+      await this._loadAllManifest();
+    } catch (err) {
+      console.error(err);
+      this.emit("error", err);
+      this.playheadState = PlayheadState.STOPPED;
+    }
+    debug(`Playhead started`);
     while (this.playheadState !== (PlayheadState.CRASHED as PlayheadState)) {
       try {
-        // Nothing to do if we have no Source to probe
-        if (!this.masterManifest) {
-          await timer(3000);
-          continue;
-        }
         if (this.playheadState === (PlayheadState.STOPPED as PlayheadState)) {
           debug(`Stopping playhead`);
           return;
         }
 
+        // Nothing to do if we have no Source to probe
+        if (!this.masterManifest) {
+          await timer(3000);
+          continue;
+        }
         // Is the Event over Case 2?
         if (this.sourcePlaylistIsVOD) {
           debug(
             "Source has become a VOD. And vodRealTime Config is false." +
               "Procceeding to stop Playhead and create a VOD..."
           );
-          this.emit("mseq-increment", { allPlaylistSegments: this.segments });
+          this.emit("mseq-increment", {
+            allPlaylistSegments: this.segments,
+            cookie: this.cookieJar,
+          });
           this.stopPlayhead();
           continue;
         }
@@ -354,7 +370,10 @@ export class HLSRecorder extends EventEmitter {
           );
           if (this.addEndTag) {
             this._addEndlistTag();
-            this.emit("mseq-increment", { allPlaylistSegments: this.segments });
+            this.emit("mseq-increment", {
+              allPlaylistSegments: this.segments,
+              cookie: this.cookieJar,
+            });
           }
           this.stopPlayhead();
           continue;
@@ -371,6 +390,7 @@ export class HLSRecorder extends EventEmitter {
       } catch (err) {
         debug(`Playhead consumer crashed`);
         console.error(err);
+        this.emit("error", err);
         this.playheadState = PlayheadState.CRASHED as PlayheadState;
       }
     }
@@ -430,15 +450,22 @@ export class HLSRecorder extends EventEmitter {
       }
 
       // Prepare possible event to be emitted
-      let firstMseq =
-        this.segments["video"][Object.keys(this.segments["video"])[0]].mediaSeq;
-      if (firstMseq > this.prevSourceMediaSeq) {
-        this.prevSourceMediaSeq = firstMseq;
-        this.emit("mseq-increment", { allPlaylistSegments: this.segments });
+      if (Object.keys(this.segments["video"]).length > 0) {
+        let firstMseq =
+          this.segments["video"][Object.keys(this.segments["video"])[0]]
+            .mediaSeq;
+        if (firstMseq > this.prevSourceMediaSeq) {
+          this.prevSourceMediaSeq = firstMseq;
+          this.emit("mseq-increment", {
+            allPlaylistSegments: this.segments,
+            cookie: this.cookieJar,
+          });
+        }
       }
+      debug(`Iteration of '_loadAllManifest()' done`);
     } catch (err) {
-      debug(`Error when loading all manifests!${err}`);
-      return Promise.reject(new Error(`${err}`));
+      debug(`Error when loading all manifests!`);
+      return Promise.reject(err);
     }
   }
 
@@ -455,6 +482,7 @@ export class HLSRecorder extends EventEmitter {
       this.audioManifests = await this.engine.getAudioManifests(channelId);
     } catch (err) {
       debug(`Error: Issue retrieving manifests from engine! ${err}`);
+      return Promise.reject(err);
     }
   }
 
@@ -476,8 +504,8 @@ export class HLSRecorder extends EventEmitter {
 
       return;
     } catch (err) {
-      this.liveMasterUri = null;
       debug(`Failed to fetch Live Master Manifest! ${err}`);
+      return Promise.reject(err);
     }
   }
 
@@ -555,7 +583,11 @@ export class HLSRecorder extends EventEmitter {
 
           let segment;
           if (this.livePlaylistUris) {
-            const baseURL = this.livePlaylistUris["video"][bw];
+            let baseURL = "";
+            const m = this.livePlaylistUris["video"][bw].match(/^(.*)\/.*?$/);
+            if (m) {
+              baseURL = m[1] + "/";
+            }
             // Push new segment
             segment = this._playlistItemToSegment(
               playlistItem,
@@ -839,19 +871,28 @@ export class HLSRecorder extends EventEmitter {
       video: {},
       audio: {},
     };
+
     const parser = m3u8.createStream();
     const controller = new AbortController();
     const timeout = setTimeout(() => {
-      debug(`Request Timeout! Aborting Request to ${masterURI}`);
+      `Request Timeout @ ${masterURI}`;
       controller.abort();
     }, FAIL_TIMEOUT);
-    const response = await fetch(this.cookieJar, masterURI, {
-      method: "GET",
-    });
     try {
+      const response = await fetch(this.cookieJar, masterURI, {
+        signal: controller.signal,
+        method: "GET",
+      });
+
+      if (response.status >= 400 && response.status < 600) {
+        let msg = `Failed to validate URI: ${masterURI}\nERROR! Returned Status Code: ${response.status}`;
+        debug(msg);
+        return Promise.reject(msg);
+      }
+      // Pipe response to m3u8 parser
       response.body.pipe(parser);
     } catch (err) {
-      debug(`Error when piping response to parser! ${JSON.stringify(err)}`);
+      debug(`Failed to validate URI: ${masterURI}\n Full Error -> ${err}`);
       return Promise.reject(err);
     } finally {
       clearTimeout(timeout);
@@ -967,7 +1008,6 @@ export class HLSRecorder extends EventEmitter {
       // Handle if any promise got rejected
       if (resultsList.some((result) => result.status === "rejected")) {
         debug(`ALERT! Promises I: Failed, Rejection Found! Trying again...`);
-        process.exit(0);
         FETCH_ATTEMPTS--;
         continue;
       }
@@ -1017,12 +1057,18 @@ export class HLSRecorder extends EventEmitter {
       debug(`Request Timeout! Aborting Request to ${playlistUri}`);
       controller.abort();
     }, FAIL_TIMEOUT);
-    console.log("COOKIEJAR", this.cookieJar);
-    let response = await fetch(this.cookieJar, playlistUri, {
-      method: "GET",
-      signal: controller.signal,
-    });
     try {
+      const response = await fetch(this.cookieJar, playlistUri, {
+        method: "GET",
+        signal: controller.signal,
+      });
+
+      if (response.status >= 400 && response.status < 600) {
+        let msg = `Failed to validate URI: ${playlistUri}\nERROR! Returned Status Code: ${response.status}`;
+        debug(msg);
+        return Promise.reject(msg);
+      }
+
       // CHECK if manifest already has endlist tag
       let text = await response.text();
       if (text.includes("#EXT-X-ENDLIST")) {
@@ -1030,7 +1076,7 @@ export class HLSRecorder extends EventEmitter {
       }
       str2stream(text).pipe(parser);
     } catch (err) {
-      debug(`Error when piping response to parser! ${JSON.stringify(err)}`);
+      debug(`Error: Request failed to ${playlistUri}.\nFull Error -> ${err}`);
       return Promise.reject(err);
     } finally {
       clearTimeout(timeout);
@@ -1042,7 +1088,6 @@ export class HLSRecorder extends EventEmitter {
             m3u: m3u.toString(),
             mediaSequence: m3u.get("mediaSequence"),
           };
-          console.log(result);
           resolve(result);
         } catch (exc) {
           debug(`Error when parsing latest manifest`);
