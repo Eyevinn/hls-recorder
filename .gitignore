@@ -2,3 +2,6 @@ node_modules
 dist
 types
 .env
+test-server.ts 
+demo.ts
+todo.node_modules
