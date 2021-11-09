@@ -9,6 +9,7 @@ const m3u8Header = () => {
   return m3u8;
 };
 
+
 const _daterangeAttribute = (key: string, attr: number): string => {
   if (key === "planned-duration" || key === "duration") {
     return key.toUpperCase() + "=" + `${attr.toFixed(3)}`;
@@ -16,6 +17,7 @@ const _daterangeAttribute = (key: string, attr: number): string => {
     return key.toUpperCase() + "=" + `"${attr}"`;
   }
 };
+
 
 export async function GenerateMediaM3U8(
   BW: number,
@@ -53,9 +55,9 @@ export async function GenerateMediaM3U8(
   );
 
   let m3u8 = "#EXTM3U\n";
-  m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
   m3u8 += "#EXT-X-VERSION:6\n";
-  m3u8 += "## Created with Eyevinn HLS Recorder package\n";
+  m3u8 += m3u8Header();
+  m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
   m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
