@@ -1,5 +1,6 @@
 import { IRecData } from "./handlers";
-const debug = require("debug")("hls-recorder");
+import Debug from "debug";
+const debug = Debug("hls-recorder");
 
 export async function GenerateMediaM3U8(
   BW: number,
