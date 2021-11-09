@@ -129,6 +129,7 @@ export class HLSRecorder extends EventEmitter {
   currentRecordDuration: number;
   addEndTag: boolean;
   segments: ISegments;
+  subtitleManifests: IAudioManifestList;
   audioManifests: IAudioManifestList;
   mediaManifests: IMediaManifestList;
   masterManifest: any;
