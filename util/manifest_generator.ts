@@ -1,6 +1,7 @@
 import { IRecData } from "./handlers";
 import packageJson from '../package.json';
-const debug = require("debug")("hls-recorder");
+import Debug from "debug";
+const debug = Debug("hls-recorder");
 
 const m3u8Header = () => {
   let m3u8 = "";
