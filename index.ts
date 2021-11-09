@@ -195,6 +195,7 @@ export class HLSRecorder extends EventEmitter {
     this.masterManifest = "";
     this.mediaManifests = {};
     this.audioManifests = {};
+    this.subtitleManifests = {};
     this.segments = {
       video: {},
       audio: {},
