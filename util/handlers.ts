@@ -1,9 +1,7 @@
-// TODO: Write endpoint handler functions that generate the requested type of manifest...
-
-const debug = require("debug")("hls-recorder");
-const url = require("url");
+import Debug from 'debug';
+const debug = Debug("hls-recorder");
 import { ISegments } from "..";
-import { GenerateMediaM3U8, GenerateAudioM3U8 } from "./manifest_generator";
+import { GenerateMediaM3U8, GenerateAudioM3U8 } from "./manifest_generator.js";
 
 export interface IRecData {
   mseq: number;
