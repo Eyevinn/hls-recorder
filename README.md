@@ -12,8 +12,8 @@ npm install --save @eyevinn/hls-recorder
 
 ## Usage (with Eyevinn Channel Engine)
 
-```
-const HLSRecorder = require("@eyevinn/hls-recorder");
+```javascript
+const { HLSRecorder } = require("@eyevinn/hls-recorder");
 const ChannelEngine = require("eyevinn-channel-engine");
 
 /*
@@ -34,8 +34,8 @@ const engine = new ChannelEngine(assetMgr, engineOptions);
 
 // Then use the instance as first input argument in HLSRecorder instance
 const opts = {
-  recordDuration: 4000 // seconds (-1 for infinite)
-  windowSize: 3600 // seconds (-1 for infinite)
+  recordDuration: 4000, // seconds (-1 for infinite)
+  windowSize: 3600, // seconds (-1 for infinite)
   vod: true // insert EXT-X-ENDLIST on end (creating a VOD)
 };
 const recorder = new HLSRecorder(engine, opts);
@@ -51,16 +51,16 @@ recorder.start(); // Start recording VOD2live stream
 // View Recorder Stream Playback at: "http://localhost:8001/live/master.m3u8"
 ```
 
-## Usage (with HLS Live Stream URL) - COMING SOON
+## Usage (with HLS Live Stream URL)
 
-```
-const HLSRecorder = require("@eyevinn/hls-recorder");
+```javascript
+const { HLSRecorder } = require("@eyevinn/hls-recorder");
 
 const source = "https://true.live.stream/hls/master.m3u8"
 
 const opts = {
-  recordDuration: 4000 // seconds (-1 for infinite)
-  windowSize: 3600 // seconds (-1 for infinite)
+  recordDuration: 4000, // seconds (-1 for infinite)
+  windowSize: 3600, // seconds (-1 for infinite)
   vod: true // insert EXT-X-ENDLIST on end (creating a VOD)
 };
 const recorder = new HLSRecorder(source, opts);
@@ -75,6 +75,13 @@ recorder.start(); // Start recording live stream
 
 // View Recorder Stream Playback at: "http://localhost:8001/live/master.m3u8"
 ```
+## Stopping
+To stop the recorder use:
+```javascript
+recorder.stop()
+```
+This will close the server, if listening, and will add an ENDLIST tag to the bottom of each playlist manifest
+
 
 # About Eyevinn Technology
 
