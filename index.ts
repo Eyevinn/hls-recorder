@@ -134,6 +134,15 @@ export class HLSRecorder extends EventEmitter {
   livePlaylistUris: IPlaylists | null;
   sourcePlaylistType: PlaylistType;
   engine: any; // todo channel engine type defs
+<<<<<<< Updated upstream
+=======
+  cookieJar: CookieJar;
+  serverStartTime: number;
+  discontinuitySequence: any;
+  serverStarted: boolean;
+  timerCompensation: boolean | undefined;
+  _addEndlistTag: any;
+>>>>>>> Stashed changes
 
   constructor(source: any, opts: IRecorderOptions) {
     super();
@@ -1185,3 +1194,7 @@ export class HLSRecorder extends EventEmitter {
     return LIST;
   }
 }
+function _addEndlistTag() {
+  throw new Error("Function not implemented.");
+}
+
