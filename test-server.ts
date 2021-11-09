@@ -59,6 +59,7 @@ function GetOnlyNewestSegments(
   let lastSegments: ISegments = {
     video: {},
     audio: {},
+    subtitle: {}
   };
   const Bandwidths = Object.keys(Segments["video"]);
   const newMseq = Segments["video"][Bandwidths[0]].mediaSeq;
