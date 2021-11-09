@@ -1,6 +1,14 @@
 import { IRecData } from "./handlers";
-import Debug from "debug";
-const debug = Debug("hls-recorder");
+import packageJson from '../package.json';
+const debug = require("debug")("hls-recorder");
+
+const m3u8Header = () => {
+  let m3u8 = "";
+  m3u8 += `## Created with Eyevinn HLS Recorder library (version=${packageJson.version})\n`;
+  m3u8 += "##    https://www.npmjs.com/package/@eyevinn/hls-recorder\n";
+  return m3u8;
+};
+
 
 export async function GenerateMediaM3U8(
   BW: number,
@@ -38,9 +46,9 @@ export async function GenerateMediaM3U8(
   );
 
   let m3u8 = "#EXTM3U\n";
-  m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
   m3u8 += "#EXT-X-VERSION:6\n";
-  m3u8 += "## Created with Eyevinn HLS Recorder package\n";
+  m3u8 += m3u8Header();
+  m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
   m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
