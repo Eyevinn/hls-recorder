@@ -1,7 +1,11 @@
-import Debug from 'debug';
+import Debug from "debug";
 const debug = Debug("hls-recorder");
 import { ISegments } from "..";
-import { GenerateMediaM3U8, GenerateAudioM3U8, GenerateSubtitleM3U8 } from "./manifest_generator";
+import {
+  GenerateMediaM3U8,
+  GenerateAudioM3U8,
+  GenerateSubtitleM3U8,
+} from "./manifest_generator";
 
 export interface IRecData {
   mseq: number;

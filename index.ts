@@ -15,7 +15,6 @@ import {
   GenerateMasterM3U8,
 } from "./util/manifest_generator";
 
-
 import {
   _handleMasterManifest,
   _handleMediaManifest,
@@ -205,7 +204,7 @@ export class HLSRecorder extends EventEmitter {
       Source: this.engine ? "Channel Engine" : source,
       Options: opts,
     };
-    debug(`Recorder Configs->: ${recorderConfigs}`);
+    debug(`Recorder Configs->: ${JSON.stringify(recorderConfigs, null, 2)}`);
 
     // Setup Server [!]
     this.server = restify.createServer();
@@ -299,12 +298,14 @@ export class HLSRecorder extends EventEmitter {
           debug(
             `Stopping Playhead, creating a VOD, and shutting down the server...`
           );
-          this._addEndlistTag();
-          this.emit("mseq-increment", {
-            allPlaylistSegments: this.segments,
-            type: this.sourcePlaylistType,
-            cookie: this.cookieJar,
-          });
+          if (Object.keys(this.segments["video"]).length > 0) {
+            this._addEndlistTag();
+            this.emit("mseq-increment", {
+              allPlaylistSegments: this.segments,
+              type: this.sourcePlaylistType,
+              cookieJar: this.cookieJar,
+            });
+          }
           this.stopPlayhead();
         }
         if (this.serverStarted) {
@@ -336,6 +337,7 @@ export class HLSRecorder extends EventEmitter {
         this.emit("mseq-increment", {
           allPlaylistSegments: this.segments,
           type: this.sourcePlaylistType,
+          cookieJar: this.cookieJar,
         });
         this.stopPlayhead();
       }
@@ -377,6 +379,7 @@ export class HLSRecorder extends EventEmitter {
           this.emit("mseq-increment", {
             allPlaylistSegments: this.segments,
             type: this.sourcePlaylistType,
+            cookieJar: this.cookieJar,
           });
           this.stopPlayhead();
           continue;
@@ -399,7 +402,7 @@ export class HLSRecorder extends EventEmitter {
             this.emit("mseq-increment", {
               allPlaylistSegments: this.segments,
               type: this.sourcePlaylistType,
-              cookie: this.cookieJar,
+              cookieJar: this.cookieJar,
             });
           }
           this.stopPlayhead();
@@ -485,19 +488,25 @@ export class HLSRecorder extends EventEmitter {
           this.emit("mseq-increment", {
             allPlaylistSegments: this.segments,
             type: this.sourcePlaylistType,
+            cookieJar: this.cookieJar,
           });
         }
       } else {
-        // Prepare possible event to be emitted
-        let firstMseq =
-          this.segments["video"][Object.keys(this.segments["video"])[0]]
-            .mediaSeq;
-        if (firstMseq > this.prevSourceMediaSeq) {
-          this.prevSourceMediaSeq = firstMseq;
-          this.emit("mseq-increment", {
-            allPlaylistSegments: this.segments,
-            type: this.sourcePlaylistType,
-          });
+        // Prepare possible event to be emitted.
+        if (this.segments["video"][Object.keys(this.segments["video"])[0]]) {
+          let newMseq =
+            this.segments["video"][Object.keys(this.segments["video"])[0]]
+              .mediaSeq;
+          if (newMseq > this.prevSourceMediaSeq) {
+            this.prevSourceMediaSeq = newMseq;
+            this.emit("mseq-increment", {
+              allPlaylistSegments: this.segments,
+              type: this.sourcePlaylistType,
+              cookieJar: this.cookieJar,
+            });
+          }
+        } else {
+          throw new Error("Unsuccessful when reaching HLS Source URL");
         }
       }
       debug(`Iteration of '_loadAllManifest()' done`);
@@ -578,7 +587,7 @@ export class HLSRecorder extends EventEmitter {
         loadPromises.push(this._loadSubtitleSegments(group, lang));
       }
     });
-    
+
     await Promise.all(loadPromises);
     if (this.sourcePlaylistType === PlaylistType.VOD) {
       this._addEndlistTag();
@@ -864,31 +873,6 @@ export class HLSRecorder extends EventEmitter {
     baseUrl?: string
   ): Segment {
     let attributes = playlistItem["attributes"].attributes;
-    // for EXT-X-DISCONTINUITY
-    if (playlistItem.properties.discontinuity) {
-      return {
-        index: null,
-        duration: null,
-        uri: null,
-        discontinuity: true,
-      };
-    }
-    // for EXT-X-DATERANGE
-    if ("daterange" in attributes) {
-      return {
-        index: null,
-        duration: null,
-        uri: null,
-        daterange: {
-          id: attributes["daterange"]["ID"],
-          "start-date": attributes["daterange"]["START-DATE"],
-          "planned-duration": parseFloat(
-            attributes["daterange"]["PLANNED-DURATION"]
-          ),
-        },
-      };
-    }
-
     // for all EXT-X-CUE related tags.
     let assetData = playlistItem.get("assetdata");
     let cueOut = playlistItem.get("cueout");
@@ -926,10 +910,27 @@ export class HLSRecorder extends EventEmitter {
     }
     let segment: Segment = {
       index: idx,
-      duration: playlistItem.properties.duration,
-      uri: segmentUri,
-      cue: cue,
+      duration: playlistItem.properties.duration
+        ? playlistItem.properties.duration
+        : null,
+      uri: segmentUri ? segmentUri : null,
+      cue: cue ? cue : null,
     };
+    // for EXT-X-DISCONTINUITY
+    if (playlistItem.properties.discontinuity) {
+      segment["discontinuity"] = true;
+    }
+    // for EXT-X-DATERANGE
+    if ("daterange" in attributes) {
+      segment["daterange"] = {
+        id: attributes["daterange"]["ID"],
+        "start-date": attributes["daterange"]["START-DATE"],
+        "planned-duration": parseFloat(
+          attributes["daterange"]["PLANNED-DURATION"]
+        ),
+      };
+    }
+
     return segment;
   }
 
@@ -1228,8 +1229,11 @@ export class HLSRecorder extends EventEmitter {
 
       // Handle if any promise got rejected
       if (resultsList.some((result) => result.status === "rejected")) {
-        debug(`ALERT! Promises I: Failed, Rejection Found! Trying again...`);
+        debug(
+          `ALERT! Promises I: Failed, Rejection Found! Trying again...(tries left=${FETCH_ATTEMPTS})`
+        );
         FETCH_ATTEMPTS--;
+        await timer(1500);
         continue;
       }
 
@@ -1297,10 +1301,13 @@ export class HLSRecorder extends EventEmitter {
       // CHECK if manifest already has endlist tag
       let text = await response.text();
       if (text.includes("#EXT-X-ENDLIST")) {
+        debug(`Detected source HLS stream type to be: VOD`);
         this.sourcePlaylistType = PlaylistType.VOD;
       } else if (text.includes("#EXT-X-PLAYLIST-TYPE:EVENT")) {
+        debug(`Detected source HLS stream type to be: EVENT`);
         this.sourcePlaylistType = PlaylistType.EVENT;
       } else {
+        debug(`Detected source HLS stream type to be: LIVE`);
         this.sourcePlaylistType = PlaylistType.LIVE;
       }
       str2stream(text).pipe(parser);
@@ -1408,7 +1415,3 @@ export class HLSRecorder extends EventEmitter {
     return LIST;
   }
 }
-function _addEndlistTag() {
-  throw new Error("Function not implemented.");
-}
-

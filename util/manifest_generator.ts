@@ -9,7 +9,6 @@ const m3u8Header = () => {
   return m3u8;
 };
 
-
 const _daterangeAttribute = (key: string, attr: number): string => {
   if (key === "planned-duration" || key === "duration") {
     return key.toUpperCase() + "=" + `${attr.toFixed(3)}`;
@@ -17,7 +16,6 @@ const _daterangeAttribute = (key: string, attr: number): string => {
     return key.toUpperCase() + "=" + `"${attr}"`;
   }
 };
-
 
 export async function GenerateMediaM3U8(
   BW: number,
@@ -169,9 +167,9 @@ export async function GenerateAudioM3U8(
   );
 
   let m3u8 = "#EXTM3U\n";
-  m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
   m3u8 += "#EXT-X-VERSION:6\n";
-  m3u8 += "## Created with Eyevinn HLS Recorder package\n";
+  m3u8 += m3u8Header();
+  m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
   m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
@@ -291,9 +289,9 @@ export async function GenerateSubtitleM3U8(
   );
 
   let m3u8 = "#EXTM3U\n";
-  m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
   m3u8 += "#EXT-X-VERSION:6\n";
-  m3u8 += "## Created with Eyevinn HLS Recorder package\n";
+  m3u8 += m3u8Header();
+  m3u8 += "#EXT-X-PLAYLIST-TYPE:EVENT\n";
   m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
@@ -368,7 +366,7 @@ export async function GenerateSubtitleM3U8(
 
 export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
   debug(
-    `[m3u8generator]: Started Generating the Master Manifest...${m3u.items.StreamItem.length}`
+    `[m3u8generator]: Started Generating the Master Manifest...[${m3u.items.StreamItem.length}]`
   );
 
   let m3u8 = "#EXTM3U\n";
@@ -423,7 +421,9 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
     return item.attributes.attributes.type === "SUBTITLES";
   });
 
-  m3u8 += `\n## Audio Tracks \n`;
+  if (audioItems.length > 0) {
+    m3u8 += `\n## Audio Tracks \n`;
+  }
 
   for (let i = 0; i < audioItems.length; i++) {
     const audioItem = audioItems[i];
@@ -463,7 +463,9 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
     m3u8 += `,URI="master-audio_${groupId}_${language}.m3u8"\n`;
   }
 
-  m3u8 += `\n## Subtitle Tracks \n`;
+  if (subtitleItems.length > 0) {
+    m3u8 += `\n## Subtitle Tracks \n`;
+  }
 
   for (let i = 0; i < subtitleItems.length; i++) {
     const subtitleItem = subtitleItems[i];
