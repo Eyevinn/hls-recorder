@@ -1,4 +1,6 @@
 node_modules
 dist
-types
 .env
+test-server.ts
+todo.md
+demo.ts
