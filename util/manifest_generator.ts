@@ -1,7 +1,9 @@
 import { IRecData } from "./handlers";
 import packageJson from "../package.json";
+import { Segment } from "..";
 const debug = require("debug")("hls-recorder");
 
+// Helper functions
 const m3u8Header = () => {
   let m3u8 = "";
   m3u8 += `## Created with Eyevinn HLS Recorder library (version=${packageJson.version})\n`;
@@ -17,6 +19,91 @@ const _daterangeAttribute = (key: string, attr: number): string => {
   }
 };
 
+const _segmentToString = (seg: Segment): string => {
+  let m3u8 = "";
+  if (seg.endlist) {
+    m3u8 += "#EXT-X-ENDLIST\n";
+  }
+  if (seg.map) {
+    m3u8 += `#EXT-X-MAP:URI=${seg.map.uri}`;
+    if (seg.map.byterange) {
+      m3u8 += `,BYTERANGE=${seg.map.byterange}`;
+    }
+    m3u8 += "\n";
+  }
+  if (seg.discontinuity) {
+    m3u8 += "#EXT-X-DISCONTINUITY\n";
+  }
+  if (seg.cue) {
+    if (seg.cue.in) {
+      m3u8 += "#EXT-X-CUE-IN" + "\n";
+    }
+    if (seg.cue.out) {
+      if (seg.cue.scteData) {
+        m3u8 += "#EXT-OATCLS-SCTE35:" + seg.cue.scteData + "\n";
+      }
+      if (seg.cue.assetData) {
+        m3u8 += "#EXT-X-ASSET:" + seg.cue.assetData + "\n";
+      }
+      m3u8 += "#EXT-X-CUE-OUT:DURATION=" + seg.cue.duration + "\n";
+    }
+    if (seg.cue.cont) {
+      if (seg.cue.scteData) {
+        m3u8 +=
+          "#EXT-X-CUE-OUT-CONT:ElapsedTime=" +
+          seg.cue.cont +
+          ",Duration=" +
+          seg.cue.duration +
+          ",SCTE35=" +
+          seg.cue.scteData +
+          "\n";
+      } else {
+        m3u8 +=
+          "#EXT-X-CUE-OUT-CONT:" + seg.cue.cont + "/" + seg.cue.duration + "\n";
+      }
+    }
+  }
+  if (seg.daterange) {
+    const dateRangeAttributes = Object.keys(seg.daterange)
+      .map((key) => _daterangeAttribute(key, seg.daterange[key]))
+      .join(",");
+    if (seg.daterange["start-date"]) {
+      m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange["start-date"] + "\n";
+    }
+    m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
+  }
+  if (seg.datetime) {
+    m3u8 += `#EXT-X-PROGRAM-DATE-TIME:${seg.datetime}\n`;
+  }
+  if (seg.key) {
+    m3u8 += `#EXT-X-KEY:METHOD=${seg.key.method}`;
+    if (seg.key.uri) {
+      m3u8 += `,URI=${seg.key.uri}`;
+    }
+    if (seg.key.iv) {
+      m3u8 += `,IV=${seg.key.iv}`;
+    }
+    if (seg.key.format) {
+      m3u8 += `,KEYFORMAT=${seg.key.format}`;
+    }
+    if (seg.key.formatVersions) {
+      m3u8 += `,KEYFORMATVERSIONS=${seg.key.formatVersions}`;
+    }
+    m3u8 += "\n";
+  }
+  if (seg.uri) {
+    m3u8 += "#EXTINF:" + seg.duration?.toFixed(3) + ",\n";
+    m3u8 += seg.uri + "\n";
+  }
+  return m3u8;
+}
+
+
+//   .---------------------.
+//===| GENERATOR FUNCTIONS |===>
+//   '---------------------'
+
+// For Video
 export async function GenerateMediaM3U8(
   BW: number,
   OPTIONS: IRecData
@@ -65,64 +152,13 @@ export async function GenerateMediaM3U8(
   }
   for (let i = 0; i < OPTIONS.allSegments["video"][BW].segList.length; i++) {
     const seg = OPTIONS.allSegments["video"][BW].segList[i];
-    if (seg.endlist) {
-      m3u8 += "#EXT-X-ENDLIST\n";
-    }
-    if (seg.discontinuity) {
-      m3u8 += "#EXT-X-DISCONTINUITY\n";
-    }
-    if (seg.cue) {
-      if (seg.cue.in) {
-        m3u8 += "#EXT-X-CUE-IN" + "\n";
-      }
-      if (seg.cue.out) {
-        if (seg.cue.scteData) {
-          m3u8 += "#EXT-OATCLS-SCTE35:" + seg.cue.scteData + "\n";
-        }
-        if (seg.cue.assetData) {
-          m3u8 += "#EXT-X-ASSET:" + seg.cue.assetData + "\n";
-        }
-        m3u8 += "#EXT-X-CUE-OUT:DURATION=" + seg.cue.duration + "\n";
-      }
-      if (seg.cue.cont) {
-        if (seg.cue.scteData) {
-          m3u8 +=
-            "#EXT-X-CUE-OUT-CONT:ElapsedTime=" +
-            seg.cue.cont +
-            ",Duration=" +
-            seg.cue.duration +
-            ",SCTE35=" +
-            seg.cue.scteData +
-            "\n";
-        } else {
-          m3u8 +=
-            "#EXT-X-CUE-OUT-CONT:" +
-            seg.cue.cont +
-            "/" +
-            seg.cue.duration +
-            "\n";
-        }
-      }
-    }
-    if (seg.daterange) {
-      const dateRangeAttributes = Object.keys(seg.daterange)
-        .map((key) => _daterangeAttribute(key, seg.daterange[key]))
-        .join(",");
-      if (seg.daterange["start-date"]) {
-        m3u8 +=
-          "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange["start-date"] + "\n";
-      }
-      m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
-    }
-    if (seg.uri) {
-      m3u8 += "#EXTINF:" + seg.duration?.toFixed(3) + ",\n";
-      m3u8 += seg.uri + "\n";
-    }
+    m3u8 += _segmentToString(seg);
   }
   debug(`[m3u8generator]: Manifest Generation Complete!`);
   return m3u8;
 }
 
+// For Audio
 export async function GenerateAudioM3U8(
   GROUP: string,
   LANG: string,
@@ -184,64 +220,13 @@ export async function GenerateAudioM3U8(
     i++
   ) {
     const seg = OPTIONS.allSegments["audio"][GROUP][LANG].segList[i];
-    if (seg.endlist) {
-      m3u8 += "#EXT-X-ENDLIST\n";
-    }
-    if (seg.discontinuity) {
-      m3u8 += "#EXT-X-DISCONTINUITY\n";
-    }
-    if (seg.cue) {
-      if (seg.cue.in) {
-        m3u8 += "#EXT-X-CUE-IN" + "\n";
-      }
-      if (seg.cue.out) {
-        if (seg.cue.scteData) {
-          m3u8 += "#EXT-OATCLS-SCTE35:" + seg.cue.scteData + "\n";
-        }
-        if (seg.cue.assetData) {
-          m3u8 += "#EXT-X-ASSET:" + seg.cue.assetData + "\n";
-        }
-        m3u8 += "#EXT-X-CUE-OUT:DURATION=" + seg.cue.duration + "\n";
-      }
-      if (seg.cue.cont) {
-        if (seg.cue.scteData) {
-          m3u8 +=
-            "#EXT-X-CUE-OUT-CONT:ElapsedTime=" +
-            seg.cue.cont +
-            ",Duration=" +
-            seg.cue.duration +
-            ",SCTE35=" +
-            seg.cue.scteData +
-            "\n";
-        } else {
-          m3u8 +=
-            "#EXT-X-CUE-OUT-CONT:" +
-            seg.cue.cont +
-            "/" +
-            seg.cue.duration +
-            "\n";
-        }
-      }
-    }
-    if (seg.daterange) {
-      const dateRangeAttributes = Object.keys(seg.daterange)
-        .map((key) => _daterangeAttribute(key, seg.daterange[key]))
-        .join(",");
-      if (seg.daterange["start-date"]) {
-        m3u8 +=
-          "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange["start-date"] + "\n";
-      }
-      m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
-    }
-    if (seg.uri) {
-      m3u8 += "#EXTINF:" + seg.duration?.toFixed(3) + ",\n";
-      m3u8 += seg.uri + "\n";
-    }
+    m3u8 += _segmentToString(seg);
   }
   debug(`[m3u8generator]: Audio Manifest Generation Complete!`);
   return m3u8;
 }
 
+// For Subtitles
 export async function GenerateSubtitleM3U8(
   GROUP: string,
   LANG: string,
@@ -306,64 +291,13 @@ export async function GenerateSubtitleM3U8(
     i++
   ) {
     const seg = OPTIONS.allSegments["subtitle"][GROUP][LANG].segList[i];
-    if (seg.endlist) {
-      m3u8 += "#EXT-X-ENDLIST\n";
-    }
-    if (seg.discontinuity) {
-      m3u8 += "#EXT-X-DISCONTINUITY\n";
-    }
-    if (seg.cue) {
-      if (seg.cue.in) {
-        m3u8 += "#EXT-X-CUE-IN" + "\n";
-      }
-      if (seg.cue.out) {
-        if (seg.cue.scteData) {
-          m3u8 += "#EXT-OATCLS-SCTE35:" + seg.cue.scteData + "\n";
-        }
-        if (seg.cue.assetData) {
-          m3u8 += "#EXT-X-ASSET:" + seg.cue.assetData + "\n";
-        }
-        m3u8 += "#EXT-X-CUE-OUT:DURATION=" + seg.cue.duration + "\n";
-      }
-      if (seg.cue.cont) {
-        if (seg.cue.scteData) {
-          m3u8 +=
-            "#EXT-X-CUE-OUT-CONT:ElapsedTime=" +
-            seg.cue.cont +
-            ",Duration=" +
-            seg.cue.duration +
-            ",SCTE35=" +
-            seg.cue.scteData +
-            "\n";
-        } else {
-          m3u8 +=
-            "#EXT-X-CUE-OUT-CONT:" +
-            seg.cue.cont +
-            "/" +
-            seg.cue.duration +
-            "\n";
-        }
-      }
-    }
-    if (seg.daterange) {
-      const dateRangeAttributes = Object.keys(seg.daterange)
-        .map((key) => _daterangeAttribute(key, seg.daterange[key]))
-        .join(",");
-      if (seg.daterange["start-date"]) {
-        m3u8 +=
-          "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange["start-date"] + "\n";
-      }
-      m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
-    }
-    if (seg.uri) {
-      m3u8 += "#EXTINF:" + seg.duration?.toFixed(3) + ",\n";
-      m3u8 += seg.uri + "\n";
-    }
+    m3u8 += _segmentToString(seg);
   }
   debug(`[m3u8generator]: Subtitle Manifest Generation Complete!`);
   return m3u8;
 }
 
+// For Master
 export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
   debug(
     `[m3u8generator]: Started Generating the Master Manifest...[${m3u.items.StreamItem.length}]`
@@ -378,6 +312,7 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
     let bw = null;
     let resolution = null;
     let codecs = null;
+    let frameRate = null;
     let subs = null;
     let audio = null;
     if (streamItem.get("bandwidth")) {
@@ -389,6 +324,9 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
     }
     if (streamItem.get("codecs")) {
       codecs = streamItem.get("codecs");
+    }
+    if (streamItem.get("frame-rate")) {
+      frameRate = streamItem.get("frame-rate");
     }
     if (streamItem.attributes.attributes["audio"]) {
       audio = streamItem.attributes.attributes["audio"];
@@ -402,6 +340,9 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
     }
     if (codecs) {
       m3u8 += `,CODECS="${codecs}"`;
+    }
+    if (frameRate) {
+      m3u8 += `,FRAME-RATE=${frameRate}`
     }
     if (audio) {
       m3u8 += `,AUDIO="${audio}"`;

@@ -47,6 +47,18 @@ export type Segment = {
     scteData: string | null;
     assetData: string | null;
   } | null;
+  key?: {
+    method: string;
+    uri: string;
+    iv: string;
+    format: string;
+    formatVersions: string;
+  } | null;
+  map?: {
+    uri: string;
+    byterange: string;
+  } | null;
+  datetime?: string | null;
 };
 
 interface IVideoSegments {
@@ -896,8 +908,38 @@ export class HLSRecorder extends EventEmitter {
             assetData: typeof assetData !== "undefined" ? assetData : null,
           }
         : null;
+    // for all EXT-X-KEY related tags.
+    let keyMethod = playlistItem.get("key-method");
+    let keyUri = playlistItem.get("key-uri");
+    let keyIv = playlistItem.get("key-iv");
+    let keyFormat = playlistItem.get("key-keyformat");
+    let keyFormatVersions = playlistItem.get("key-keyformatversions");
+    let key =
+      keyMethod || keyUri || keyIv || keyFormat || keyFormatVersions
+        ? {
+            method: typeof keyMethod !== "undefined" ? keyMethod : null,
+            uri: typeof keyUri !== "undefined" ? keyUri : null,
+            iv: typeof keyIv !== "undefined" ? keyIv : null,
+            format: typeof keyFormat !== "undefined" ? keyFormat : null,
+            formatVersions:
+              typeof keyFormatVersions !== "undefined"
+                ? keyFormatVersions
+                : null,
+          }
+        : null;
+    // for all EXT-X-MAP related tags.
+    let mapUri = playlistItem.get("map-uri");
+    let mapByterange = playlistItem.get("map-byterange");
+    let map =
+      mapUri || mapByterange
+        ? {
+            uri: typeof mapUri !== "undefined" ? mapUri : null,
+            byterange:
+              typeof mapByterange !== "undefined" ? mapByterange : null,
+          }
+        : null;
 
-    // For Normal #EXTINF + url
+    // For Normal EXTINF + url
     let segmentUri: string = "";
     if (playlistItem.properties.uri) {
       if (playlistItem.properties.uri.match("^http")) {
@@ -908,6 +950,7 @@ export class HLSRecorder extends EventEmitter {
         }
       }
     }
+    // Base Segment Item
     let segment: Segment = {
       index: idx,
       duration: playlistItem.properties.duration
@@ -915,10 +958,17 @@ export class HLSRecorder extends EventEmitter {
         : null,
       uri: segmentUri ? segmentUri : null,
       cue: cue ? cue : null,
+      key: key ? key : null,
+      map: map ? map : null,
     };
+
     // for EXT-X-DISCONTINUITY
     if (playlistItem.properties.discontinuity) {
       segment["discontinuity"] = true;
+    }
+    // for EXT-X-PROGRAM-DATE-TIME
+    if (playlistItem.properties.date) {
+      segment["datetime"] = playlistItem.properties.date;
     }
     // for EXT-X-DATERANGE
     if ("daterange" in attributes) {

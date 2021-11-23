@@ -2,14 +2,15 @@ import { IRecorderOptions } from "./index.js";
 import { HLSRecorder, ISegments } from "./index";
 
 const rec_opts: IRecorderOptions = {
-  recordDuration: 114,
+  recordDuration: 120,
   windowSize: -1,
   vod: true,
 };
 
 const LIVE_URI = "http://localhost:8000/channels/1/master.m3u8";
-
-const recorder = new HLSRecorder(LIVE_URI, rec_opts);
+const LIVE_URI2 =
+  "https://bitdash-a.akamaihd.net/content/MI201109210084_1/m3u8s-fmp4/f08e80da-bf1d-4e3d-8899-f0f6155f6efa.m3u8";
+const recorder = new HLSRecorder(LIVE_URI2, rec_opts);
 
 recorder.on(
   "mseq-increment",
