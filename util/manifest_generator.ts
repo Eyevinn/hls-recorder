@@ -25,7 +25,7 @@ const _segmentToString = (seg: Segment): string => {
     m3u8 += "#EXT-X-ENDLIST\n";
   }
   if (seg.map) {
-    m3u8 += `#EXT-X-MAP:URI=${seg.map.uri}`;
+    m3u8 += `#EXT-X-MAP:URI="${seg.map.uri}"`;
     if (seg.map.byterange) {
       m3u8 += `,BYTERANGE=${seg.map.byterange}`;
     }
@@ -78,16 +78,16 @@ const _segmentToString = (seg: Segment): string => {
   if (seg.key) {
     m3u8 += `#EXT-X-KEY:METHOD=${seg.key.method}`;
     if (seg.key.uri) {
-      m3u8 += `,URI=${seg.key.uri}`;
+      m3u8 += `,URI="${seg.key.uri}"`;
     }
     if (seg.key.iv) {
       m3u8 += `,IV=${seg.key.iv}`;
     }
     if (seg.key.format) {
-      m3u8 += `,KEYFORMAT=${seg.key.format}`;
+      m3u8 += `,KEYFORMAT="${seg.key.format}"`;
     }
     if (seg.key.formatVersions) {
-      m3u8 += `,KEYFORMATVERSIONS=${seg.key.formatVersions}`;
+      m3u8 += `,KEYFORMATVERSIONS="${seg.key.formatVersions}"`;
     }
     m3u8 += "\n";
   }
@@ -401,7 +401,7 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
     } else {
       m3u8 += `,AUTOSELECT=NO`;
     }
-    m3u8 += `,URI="master-audio_${groupId}_${language}.m3u8"\n`;
+    m3u8 += `,URI="master-audiotrack_${groupId}_${language}.m3u8"\n`;
   }
 
   if (subtitleItems.length > 0) {
@@ -442,7 +442,7 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
     } else {
       m3u8 += `,AUTOSELECT=NO`;
     }
-    m3u8 += `,URI="master-sub_${groupId}_${language}.m3u8"\n`;
+    m3u8 += `,URI="master-subtrack_${groupId}_${language}.m3u8"\n`;
   }
   debug(`[m3u8generator]: Master Manifest Generation Complete!`);
   return m3u8;

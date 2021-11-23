@@ -7,10 +7,18 @@ const rec_opts: IRecorderOptions = {
   vod: true,
 };
 
-const LIVE_URI = "http://localhost:8000/channels/1/master.m3u8";
-const LIVE_URI2 =
-  "https://bitdash-a.akamaihd.net/content/MI201109210084_1/m3u8s-fmp4/f08e80da-bf1d-4e3d-8899-f0f6155f6efa.m3u8";
-const recorder = new HLSRecorder(LIVE_URI2, rec_opts);
+const URI = "http://localhost:8000/channels/1/master.m3u8";
+// With PROGRAM-DATE-TIME live live
+const URI2 =
+  "https://cbsn-us.cbsnstream.cbsnews.com/out/v1/55a8648e8f134e82a470f83d562deeca/master.m3u8";
+// With MAP vod
+const URI3 =
+  "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8";
+// With KEY vod
+const URI4 =
+  "https://playertest.longtailvideo.com/adaptive/aes-with-tracks/master.m3u8";
+
+const recorder = new HLSRecorder(URI4, rec_opts);
 
 recorder.on(
   "mseq-increment",
@@ -24,6 +32,20 @@ recorder.on(
         2
       )}`
     );
+    const groups = Object.keys(data.allPlaylistSegments["audio"]);
+    if (groups.length > 0) {
+      const languages = Object.keys(
+        data.allPlaylistSegments["audio"][groups[0]]
+      );
+      const lang0 = languages[0];
+      console.log(
+        `We got some sound: ${JSON.stringify(
+          data.allPlaylistSegments["audio"][groups[0]][lang0],
+          null,
+          2
+        )}`
+      );
+    }
   }
 );
 recorder.on("error", (err: any) => {

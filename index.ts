@@ -239,9 +239,10 @@ export class HLSRecorder extends EventEmitter {
           data.dseq = this.discontinuitySequence;
         }
         await _handleMediaManifest(req, res, next, data);
-      } else if ((m = req.params.file.match(/master-(\S+)_(\S+)_(\S+).m3u8/))) {
+      } else if ((m = req.params.file.match(/master-(\S+)track_(\S+)_(\S+).m3u8/))) {
         req.params[0] = m[2];
         req.params[1] = m[3];
+        console.log(JSON.stringify(m, null, 2));
         let data: IRecData = {
           mseq: this.prevMediaSeq,
           targetDuration: this.recorderM3U8TargetDuration,
@@ -927,6 +928,15 @@ export class HLSRecorder extends EventEmitter {
                 : null,
           }
         : null;
+    // Use Absolute Path
+    if (key?.uri) {
+      if (!key?.uri.match("^http")) {
+        if (baseUrl) {
+          key.uri = url.resolve(baseUrl, key.uri);
+        }
+      }
+    }
+
     // for all EXT-X-MAP related tags.
     let mapUri = playlistItem.get("map-uri");
     let mapByterange = playlistItem.get("map-byterange");
@@ -938,6 +948,14 @@ export class HLSRecorder extends EventEmitter {
               typeof mapByterange !== "undefined" ? mapByterange : null,
           }
         : null;
+    // Use Absolute Path
+    if (map?.uri) {
+      if (!map?.uri.match("^http")) {
+        if (baseUrl) {
+          map.uri = url.resolve(baseUrl, map.uri);
+        }
+      }
+    }
 
     // For Normal EXTINF + url
     let segmentUri: string = "";
@@ -994,7 +1012,7 @@ export class HLSRecorder extends EventEmitter {
 
         for (let i = 0; i < m3u.items.StreamItem.length; i++) {
           const streamItem = m3u.items.StreamItem[i];
-          if (streamItem.get("bandwidth")) {
+          if (streamItem.get("bandwidth") && streamItem.get("resolution")) {
             if (streamItem.attributes.attributes["audio"]) {
               let audioStreamItem = m3u.items.MediaItem.find(
                 (mediaItem: any) => {
@@ -1235,7 +1253,9 @@ export class HLSRecorder extends EventEmitter {
         let bandwidths = Object.keys(videoPlaylists);
         bandwidths.forEach((bw) => {
           livePromises.push(this._fetchPlaylistManifest(videoPlaylists[bw]));
-          debug(`Pushed promise for fetching bw=[${bw}_${videoPlaylists[bw]}]`);
+          debug(
+            `Pushed promise for fetching bw=[${bw}] from->${videoPlaylists[bw]}`
+          );
         });
 
         // Append promises for fetching all audio playlist
@@ -1247,7 +1267,9 @@ export class HLSRecorder extends EventEmitter {
             livePromises.push(
               this._fetchPlaylistManifest(audioPlaylists[group][lang])
             );
-            debug(`Pushed promise for fetching group_lang=[${group}_${lang}]`);
+            debug(
+              `Pushed promise for fetching group_lang=[${group}_${lang}] from->${audioPlaylists[group][lang]}`
+            );
           }
         });
 
@@ -1260,7 +1282,9 @@ export class HLSRecorder extends EventEmitter {
             livePromises.push(
               this._fetchPlaylistManifest(subtitlePlaylists[group][lang])
             );
-            debug(`Pushed promise for fetching group_lang=[${group}_${lang}]`);
+            debug(
+              `Pushed promise for fetching group_lang=[${group}_${lang}] from->${subtitlePlaylists[group][lang]}`
+            );
           }
         });
 
