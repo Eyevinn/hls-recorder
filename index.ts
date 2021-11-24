@@ -244,7 +244,6 @@ export class HLSRecorder extends EventEmitter {
       ) {
         req.params[0] = m[2];
         req.params[1] = m[3];
-        console.log(JSON.stringify(m, null, 2));
         let data: IRecData = {
           mseq: this.prevMediaSeq,
           targetDuration: this.recorderM3U8TargetDuration,
