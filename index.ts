@@ -47,6 +47,18 @@ export type Segment = {
     scteData: string | null;
     assetData: string | null;
   } | null;
+  key?: {
+    method: string;
+    uri: string;
+    iv: string;
+    format: string;
+    formatVersions: string;
+  } | null;
+  map?: {
+    uri: string;
+    byterange: string;
+  } | null;
+  datetime?: string | null;
 };
 
 interface IVideoSegments {
@@ -227,9 +239,12 @@ export class HLSRecorder extends EventEmitter {
           data.dseq = this.discontinuitySequence;
         }
         await _handleMediaManifest(req, res, next, data);
-      } else if ((m = req.params.file.match(/master-(\S+)_(\S+)_(\S+).m3u8/))) {
+      } else if (
+        (m = req.params.file.match(/master-(\S+)track_(\S+)_(\S+).m3u8/))
+      ) {
         req.params[0] = m[2];
         req.params[1] = m[3];
+        console.log(JSON.stringify(m, null, 2));
         let data: IRecData = {
           mseq: this.prevMediaSeq,
           targetDuration: this.recorderM3U8TargetDuration,
@@ -896,8 +911,55 @@ export class HLSRecorder extends EventEmitter {
             assetData: typeof assetData !== "undefined" ? assetData : null,
           }
         : null;
+    // for all EXT-X-KEY related tags.
+    let keyMethod = playlistItem.get("key-method");
+    let keyUri = playlistItem.get("key-uri");
+    let keyIv = playlistItem.get("key-iv");
+    let keyFormat = playlistItem.get("key-keyformat");
+    let keyFormatVersions = playlistItem.get("key-keyformatversions");
+    let key =
+      keyMethod || keyUri || keyIv || keyFormat || keyFormatVersions
+        ? {
+            method: typeof keyMethod !== "undefined" ? keyMethod : null,
+            uri: typeof keyUri !== "undefined" ? keyUri : null,
+            iv: typeof keyIv !== "undefined" ? keyIv : null,
+            format: typeof keyFormat !== "undefined" ? keyFormat : null,
+            formatVersions:
+              typeof keyFormatVersions !== "undefined"
+                ? keyFormatVersions
+                : null,
+          }
+        : null;
+    // Use Absolute Path
+    if (key?.uri) {
+      if (!key?.uri.match("^http")) {
+        if (baseUrl) {
+          key.uri = url.resolve(baseUrl, key.uri);
+        }
+      }
+    }
 
-    // For Normal #EXTINF + url
+    // for all EXT-X-MAP related tags.
+    let mapUri = playlistItem.get("map-uri");
+    let mapByterange = playlistItem.get("map-byterange");
+    let map =
+      mapUri || mapByterange
+        ? {
+            uri: typeof mapUri !== "undefined" ? mapUri : null,
+            byterange:
+              typeof mapByterange !== "undefined" ? mapByterange : null,
+          }
+        : null;
+    // Use Absolute Path
+    if (map?.uri) {
+      if (!map?.uri.match("^http")) {
+        if (baseUrl) {
+          map.uri = url.resolve(baseUrl, map.uri);
+        }
+      }
+    }
+
+    // For Normal EXTINF + url
     let segmentUri: string = "";
     if (playlistItem.properties.uri) {
       if (playlistItem.properties.uri.match("^http")) {
@@ -908,6 +970,7 @@ export class HLSRecorder extends EventEmitter {
         }
       }
     }
+    // Base Segment Item
     let segment: Segment = {
       index: idx,
       duration: playlistItem.properties.duration
@@ -915,10 +978,17 @@ export class HLSRecorder extends EventEmitter {
         : null,
       uri: segmentUri ? segmentUri : null,
       cue: cue ? cue : null,
+      key: key ? key : null,
+      map: map ? map : null,
     };
+
     // for EXT-X-DISCONTINUITY
     if (playlistItem.properties.discontinuity) {
       segment["discontinuity"] = true;
+    }
+    // for EXT-X-PROGRAM-DATE-TIME
+    if (playlistItem.properties.date) {
+      segment["datetime"] = playlistItem.properties.date;
     }
     // for EXT-X-DATERANGE
     if ("daterange" in attributes) {
@@ -944,7 +1014,7 @@ export class HLSRecorder extends EventEmitter {
 
         for (let i = 0; i < m3u.items.StreamItem.length; i++) {
           const streamItem = m3u.items.StreamItem[i];
-          if (streamItem.get("bandwidth")) {
+          if (streamItem.get("bandwidth") && streamItem.get("resolution")) {
             if (streamItem.attributes.attributes["audio"]) {
               let audioStreamItem = m3u.items.MediaItem.find(
                 (mediaItem: any) => {
@@ -1185,7 +1255,9 @@ export class HLSRecorder extends EventEmitter {
         let bandwidths = Object.keys(videoPlaylists);
         bandwidths.forEach((bw) => {
           livePromises.push(this._fetchPlaylistManifest(videoPlaylists[bw]));
-          debug(`Pushed promise for fetching bw=[${bw}_${videoPlaylists[bw]}]`);
+          debug(
+            `Pushed promise for fetching bw=[${bw}] from->${videoPlaylists[bw]}`
+          );
         });
 
         // Append promises for fetching all audio playlist
@@ -1197,7 +1269,9 @@ export class HLSRecorder extends EventEmitter {
             livePromises.push(
               this._fetchPlaylistManifest(audioPlaylists[group][lang])
             );
-            debug(`Pushed promise for fetching group_lang=[${group}_${lang}]`);
+            debug(
+              `Pushed promise for fetching group_lang=[${group}_${lang}] from->${audioPlaylists[group][lang]}`
+            );
           }
         });
 
@@ -1210,7 +1284,9 @@ export class HLSRecorder extends EventEmitter {
             livePromises.push(
               this._fetchPlaylistManifest(subtitlePlaylists[group][lang])
             );
-            debug(`Pushed promise for fetching group_lang=[${group}_${lang}]`);
+            debug(
+              `Pushed promise for fetching group_lang=[${group}_${lang}] from->${subtitlePlaylists[group][lang]}`
+            );
           }
         });
 
