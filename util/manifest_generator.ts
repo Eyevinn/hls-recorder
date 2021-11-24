@@ -96,8 +96,7 @@ const _segmentToString = (seg: Segment): string => {
     m3u8 += seg.uri + "\n";
   }
   return m3u8;
-}
-
+};
 
 //   .---------------------.
 //===| GENERATOR FUNCTIONS |===>
@@ -342,7 +341,7 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
       m3u8 += `,CODECS="${codecs}"`;
     }
     if (frameRate) {
-      m3u8 += `,FRAME-RATE=${frameRate}`
+      m3u8 += `,FRAME-RATE=${frameRate}`;
     }
     if (audio) {
       m3u8 += `,AUDIO="${audio}"`;

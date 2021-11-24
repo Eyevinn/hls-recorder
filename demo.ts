@@ -17,8 +17,10 @@ const URI3 =
 // With KEY vod
 const URI4 =
   "https://playertest.longtailvideo.com/adaptive/aes-with-tracks/master.m3u8";
+// With MAP vod all m4s
+const URI5 = "https://bitdash-a.akamaihd.net/content/MI201109210084_1/m3u8s-fmp4/f08e80da-bf1d-4e3d-8899-f0f6155f6efa.m3u8"
 
-const recorder = new HLSRecorder(URI4, rec_opts);
+const recorder = new HLSRecorder(URI5, rec_opts);
 
 recorder.on(
   "mseq-increment",

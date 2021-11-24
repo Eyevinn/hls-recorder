@@ -239,7 +239,9 @@ export class HLSRecorder extends EventEmitter {
           data.dseq = this.discontinuitySequence;
         }
         await _handleMediaManifest(req, res, next, data);
-      } else if ((m = req.params.file.match(/master-(\S+)track_(\S+)_(\S+).m3u8/))) {
+      } else if (
+        (m = req.params.file.match(/master-(\S+)track_(\S+)_(\S+).m3u8/))
+      ) {
         req.params[0] = m[2];
         req.params[1] = m[3];
         console.log(JSON.stringify(m, null, 2));
