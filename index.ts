@@ -558,8 +558,13 @@ export class HLSRecorder extends EventEmitter {
           this.liveMasterUri
         );
         this.livePlaylistUris = parserData.playlistURIs;
+        if (parserData.masterM3U === -1) {
+        this.masterManifest = "";
+        } else {
         // Replace with m3u8 gen
         this.masterManifest = await GenerateMasterM3U8(parserData.masterM3U);
+        }
+
       }
       await this._fetchAllPlaylistManifest();
 
@@ -1145,6 +1150,20 @@ export class HLSRecorder extends EventEmitter {
       (resolve, reject) => {
         parser.on("m3u", (m3u: any) => {
           debug(`Fetched a New Live Master Manifest from:\n${masterURI}`);
+          // Handle Case where source is a playlist manifest.
+          if (m3u.items.PlaylistItem.length > 0) {
+            debug(
+              `(ALERT!) Source Master Manifest is Actually a Playlist Manifest`
+            );
+            playlistURIs["video"]["1"] = masterURI;
+            const resolveObj = {
+              playlistURIs: playlistURIs,
+              masterM3U: -1,
+            };
+            this.sourceMasterManifest = "NONE";
+            resolve(resolveObj);
+          }
+
           this.sourceMasterManifest = m3u.toString();
 
           let baseUrl = "";

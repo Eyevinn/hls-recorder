@@ -21,6 +21,9 @@ export async function _handleMasterManifest(
   masterM3u: string
 ) {
   try {
+    if (masterM3u === "") {
+      masterM3u = "Source HLS steam does not have a multivariant manifest";
+    }
     const body = masterM3u;
     res.sendRaw(200, Buffer.from(body, "utf8"), {
       "Content-Type": "application/x-mpegURL;charset=UTF-8",
