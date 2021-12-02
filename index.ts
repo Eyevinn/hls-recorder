@@ -125,7 +125,7 @@ export enum PlaylistType {
 }
 
 const FAIL_TIMEOUT: number = 3000;
-
+const DEFAULT_MAX_WINDOW_SIZE: number = 5 * 60;
 /*
          ___
        [|   |=|{)__
@@ -539,12 +539,11 @@ export class HLSRecorder extends EventEmitter {
         const parserData = await this._fetchAndParseMasterManifest(this.liveMasterUri);
         this.livePlaylistUris = parserData.playlistURIs;
         if (parserData.masterM3U === -1) {
-        this.masterManifest = "";
+          this.masterManifest = "";
         } else {
-        // Replace with m3u8 gen
-        this.masterManifest = await GenerateMasterM3U8(parserData.masterM3U);
+          // Replace with m3u8 gen
+          this.masterManifest = await GenerateMasterM3U8(parserData.masterM3U);
         }
-
       }
       await this._fetchAllPlaylistManifest();
 
@@ -613,7 +612,7 @@ export class HLSRecorder extends EventEmitter {
       // If no window size was entered by the user and HLS Stream type is Live,
       // then default a window size of 5 min.
       if (this.targetWindowSize !== -1) {
-        this.targetWindowSize = 5 * 60;
+        this.targetWindowSize = DEFAULT_MAX_WINDOW_SIZE;
       }
     }
     debug(`Segment loading successful!`);
@@ -1172,25 +1171,22 @@ export class HLSRecorder extends EventEmitter {
       clearTimeout(timeout);
     }
 
-    return new Promise<{ playlistURIs: IPlaylists; masterM3U: any }>(
-      (resolve, reject) => {
-        parser.on("m3u", (m3u: any) => {
-          debug(`Fetched a New Live Master Manifest from:\n${masterURI}`);
-          // Handle Case where source is a playlist manifest.
-          if (m3u.items.PlaylistItem.length > 0) {
-            debug(
-              `(ALERT!) Source Master Manifest is Actually a Playlist Manifest`
-            );
-            playlistURIs["video"]["1"] = masterURI;
-            const resolveObj = {
-              playlistURIs: playlistURIs,
-              masterM3U: -1,
-            };
-            this.sourceMasterManifest = "NONE";
-            resolve(resolveObj);
-          }
+    return new Promise<{ playlistURIs: IPlaylists; masterM3U: any }>((resolve, reject) => {
+      parser.on("m3u", (m3u: any) => {
+        debug(`Fetched a New Live Master Manifest from:\n${masterURI}`);
+        // Handle Case where source is a playlist manifest.
+        if (m3u.items.PlaylistItem.length > 0) {
+          debug(`(ALERT!) Source Master Manifest is Actually a Playlist Manifest`);
+          playlistURIs["video"]["1"] = masterURI;
+          const resolveObj = {
+            playlistURIs: playlistURIs,
+            masterM3U: -1,
+          };
+          this.sourceMasterManifest = "NONE";
+          resolve(resolveObj);
+        }
 
-          this.sourceMasterManifest = m3u.toString();
+        this.sourceMasterManifest = m3u.toString();
 
         let baseUrl = "";
         const m = masterURI.match(/^(.*)\/.*?$/);
