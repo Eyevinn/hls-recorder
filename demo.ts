@@ -1,6 +1,5 @@
 import { IRecorderOptions } from "./index.js";
 import { HLSRecorder, ISegments } from "./index";
-import { GenerateMediaM3U8 } from "./util/manifest_generator.js";
 const timer = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 // Me
@@ -60,26 +59,4 @@ const run = async () => {
  * Run Driver function
  *********************/
 run();
-// console.log(
-//   `We got something: ${JSON.stringify(
-//     data.allPlaylistSegments["video"][level0],
-//     null,
-//     2
-//   )}`
-// );
 
-// const groups = Object.keys(data.allPlaylistSegments["audio"]);
-// if (groups.length > 0) {
-//   const languages = Object.keys(
-//     data.allPlaylistSegments["audio"][groups[0]]
-//   );
-//   const lang0 = languages[0];
-
-//   console.log(
-//     `We got some sound: ${JSON.stringify(
-//       data.allPlaylistSegments["audio"][groups[0]][lang0],
-//       null,
-//       2
-//     )}`
-//   );
-// }

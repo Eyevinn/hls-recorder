@@ -139,7 +139,7 @@ export async function GenerateMediaM3U8(BW: number, OPTIONS: IRecData): Promise<
   m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
-  if (OPTIONS.dseq) {
+  if (OPTIONS.dseq !== undefined) {
     m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + OPTIONS.dseq + "\n";
     // Add support later, live streams might use recorder with ad breaks?
   }
@@ -198,7 +198,7 @@ export async function GenerateAudioM3U8(
   m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
-  if (OPTIONS.dseq) {
+  if (OPTIONS.dseq !== undefined) {
     m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + OPTIONS.dseq + "\n";
     // Add support later, live streams might use recorder with ad breaks?
   }
@@ -258,7 +258,7 @@ export async function GenerateSubtitleM3U8(
   m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
-  if (OPTIONS.dseq) {
+  if (OPTIONS.dseq !== undefined) {
     m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + OPTIONS.dseq + "\n";
     // Add support later, live streams might use recorder with ad breaks?
   }
