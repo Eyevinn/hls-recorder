@@ -149,6 +149,7 @@ export class HLSRecorder extends EventEmitter {
   prevSourceSegCount: number;
   prevMediaSeq: number;
   recorderM3U8TargetDuration: number;
+  recorderM3U8MseqCounts: { [bandwidth: string]: number };
   liveMasterUri: string | null;
   livePlaylistUris: IPlaylists | null;
   sourcePlaylistType: PlaylistType;
@@ -202,6 +203,7 @@ export class HLSRecorder extends EventEmitter {
     this.prevMediaSeq = 0;
     this.prevSegCount = 0;
     this.recorderM3U8TargetDuration = 0;
+    this.recorderM3U8MseqCounts = {};
     this.playheadState = PlayheadState.IDLE;
 
     this.sourceMasterManifest = "";
@@ -675,14 +677,27 @@ export class HLSRecorder extends EventEmitter {
           if (!this.shouldEmitt) {
             this.shouldEmitt = true;
           }
-
-          // Lastly...
-          // Update current window size (seconds). Only needed for 1 profile/stream type.
-          if (bw === parseInt(Object.keys(this.segments["video"])[0])) {
-            if (this.targetWindowSize !== -1) {
-              // TODO: when window is large enough start shifting segments from list.
-              this.currentWindowSize += !segment.duration ? 0 : segment.duration;
+          // Shift Old Segment, if windowSize enabled
+          if (this.targetWindowSize !== -1) {
+            this.currentWindowSize += !segment.duration ? 0 : segment.duration;
+            while (this.currentWindowSize > this.targetWindowSize) {
+              if (this.segments["video"][bw].segList.length <= 0) {
+                break;
+              }
+              const releasedSegmentItem = this.segments["video"][bw].segList.shift();
+              if (releasedSegmentItem?.uri) {
+                if (bw === parseInt(Object.keys(this.segments["video"])[0])) {
+                  this.prevMediaSeq++;
+                }
+              }
+              this.currentWindowSize -= releasedSegmentItem?.duration
+                ? releasedSegmentItem.duration
+                : 0;
             }
+          }
+          // Lastly...
+          // Update current recording duraiton (seconds). Only needed for 1 profile/stream type.
+          if (bw === parseInt(Object.keys(this.segments["video"])[0])) {
             if (this.targetRecordDuration !== -1) {
               this.currentRecordDuration += !segment.duration ? 0 : segment.duration;
             }
