@@ -19,11 +19,11 @@ const URI6 = "https://demo.vc.eyevinn.technology/channels/eyevinn/master.m3u8";
 // With 24/7 Live Tears Of Steel
 const URI7 = "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8";
 // short-multi stream (demuxed & subtitles) 18 seconds
-const URI8 = "https://lab-live.cdn.eyevinn.technology/ED_V4/master.m3u8"
+const URI8 = "https://lab-live.cdn.eyevinn.technology/ED_V4/master.m3u8";
 
 const rec_opts: IRecorderOptions = {
   recordDuration: -1,
-  windowSize: -1,             // -1 for infinite* (max cap defaults at 30 000 seconds/5 minutes if source is a live manifest. To overwrite the max cap, just specify a windowsize.)
+  windowSize: -1, // -1 for infinite* (max cap defaults at 30 000 seconds/5 minutes if source is a live manifest. To overwrite the max cap, just specify a windowsize.)
   vod: true,
 };
 const recorder = new HLSRecorder(URI8, rec_opts);
@@ -54,4 +54,3 @@ const run = async () => {
  * Run Driver function
  *********************/
 run();
-
