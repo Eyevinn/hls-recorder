@@ -35,7 +35,7 @@ const engine = new ChannelEngine(assetMgr, engineOptions);
 // Then use the instance as first input argument in HLSRecorder instance
 const opts = {
   recordDuration: 4000, // seconds (-1 for infinite)
-  windowSize: 3600, // seconds (-1 for infinite)
+  windowSize: 240000, // seconds | -1 for infinite* (will fallback to Default if source is not EVENT or VOD type) | Default = 300000
   vod: true // insert EXT-X-ENDLIST on end (creating a VOD)
 };
 const recorder = new HLSRecorder(engine, opts);
@@ -59,10 +59,9 @@ const { HLSRecorder } = require("@eyevinn/hls-recorder");
 const source = "https://true.live.stream/hls/master.m3u8"
 
 const opts = {
-  recordDuration: 4000, // seconds (-1 for infinite)
-  windowSize: 3600, // seconds (-1 for infinite)
+  recordDuration: 4000, // seconds | -1 for infinite | Default = -1
+  windowSize: 240000, // seconds | -1 for infinite* (will fallback to Default if source is not EVENT or VOD type) | Default = 300000
   vod: true // insert EXT-X-ENDLIST on end (creating a VOD)
-};
 const recorder = new HLSRecorder(source, opts);
 
 recorder.on("mseq-increment", mseq => {
