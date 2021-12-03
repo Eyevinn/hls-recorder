@@ -58,22 +58,21 @@ const _segmentToString = (seg: Segment): string => {
           seg.cue.scteData +
           "\n";
       } else {
-        m3u8 +=
-          "#EXT-X-CUE-OUT-CONT:" + seg.cue.cont + "/" + seg.cue.duration + "\n";
+        m3u8 += "#EXT-X-CUE-OUT-CONT:" + seg.cue.cont + "/" + seg.cue.duration + "\n";
       }
     }
+  }
+  if (seg.datetime) {
+    m3u8 += `#EXT-X-PROGRAM-DATE-TIME:${seg.datetime}\n`;
   }
   if (seg.daterange) {
     const dateRangeAttributes = Object.keys(seg.daterange)
       .map((key) => _daterangeAttribute(key, seg.daterange[key]))
       .join(",");
-    if (seg.daterange["start-date"]) {
+    if (!seg.datetime && seg.daterange["start-date"]) {
       m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange["start-date"] + "\n";
     }
     m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
-  }
-  if (seg.datetime) {
-    m3u8 += `#EXT-X-PROGRAM-DATE-TIME:${seg.datetime}\n`;
   }
   if (seg.key) {
     m3u8 += `#EXT-X-KEY:METHOD=${seg.key.method}`;
@@ -103,10 +102,7 @@ const _segmentToString = (seg: Segment): string => {
 //   '---------------------'
 
 // For Video
-export async function GenerateMediaM3U8(
-  BW: number,
-  OPTIONS: IRecData
-): Promise<string | null> {
+export async function GenerateMediaM3U8(BW: number, OPTIONS: IRecData): Promise<string | null> {
   if (BW === null) {
     throw new Error("No bandwidth provided");
   }
@@ -134,9 +130,7 @@ export async function GenerateMediaM3U8(
     }
   }
 
-  debug(
-    `[m3u8generator]: Started Generating the Manifest with Mseq:[${OPTIONS.mseq}]...`
-  );
+  debug(`[m3u8generator]: Started Generating the Manifest with Mseq:[${OPTIONS.mseq}]...`);
 
   let m3u8 = "#EXTM3U\n";
   m3u8 += "#EXT-X-VERSION:6\n";
@@ -171,9 +165,7 @@ export async function GenerateAudioM3U8(
     );
   }
 
-  debug(
-    `[m3u8generator]: Client requesting manifest for audio track=(${GROUP}_${LANG})`
-  );
+  debug(`[m3u8generator]: Client requesting manifest for audio track=(${GROUP}_${LANG})`);
   //  DO NOT GENERATE MANIFEST CASE: Not yet started gathering segs of all variants.
   if (Object.keys(OPTIONS.allSegments["audio"]).length === 0) {
     debug(
@@ -197,9 +189,7 @@ export async function GenerateAudioM3U8(
     }
   }
 
-  debug(
-    `[m3u8generator]: Started Generating the Audio Manifest with Mseq:[${OPTIONS.mseq}]...`
-  );
+  debug(`[m3u8generator]: Started Generating the Audio Manifest with Mseq:[${OPTIONS.mseq}]...`);
 
   let m3u8 = "#EXTM3U\n";
   m3u8 += "#EXT-X-VERSION:6\n";
@@ -213,11 +203,7 @@ export async function GenerateAudioM3U8(
     // Add support later, live streams might use recorder with ad breaks?
   }
 
-  for (
-    let i = 0;
-    i < OPTIONS.allSegments["audio"][GROUP][LANG].segList.length;
-    i++
-  ) {
+  for (let i = 0; i < OPTIONS.allSegments["audio"][GROUP][LANG].segList.length; i++) {
     const seg = OPTIONS.allSegments["audio"][GROUP][LANG].segList[i];
     m3u8 += _segmentToString(seg);
   }
@@ -239,9 +225,7 @@ export async function GenerateSubtitleM3U8(
     );
   }
 
-  debug(
-    `[m3u8generator]: Client requesting manifest for subtitle track=(${GROUP}_${LANG})`
-  );
+  debug(`[m3u8generator]: Client requesting manifest for subtitle track=(${GROUP}_${LANG})`);
   //  DO NOT GENERATE MANIFEST CASE: Not yet started gathering segs of all variants.
   if (Object.keys(OPTIONS.allSegments["subtitle"]).length === 0) {
     debug(
@@ -253,11 +237,8 @@ export async function GenerateSubtitleM3U8(
   if (!Object.keys(OPTIONS.allSegments["subtitle"]).length) {
     let groups = Object.keys(OPTIONS.allSegments["subtitle"]);
     for (let i = 0; i < groups.length; i++) {
-      let segAmounts = Object.keys(
-        OPTIONS.allSegments["subtitle"][groups[i]]
-      ).map(
-        (lang) =>
-          OPTIONS.allSegments["subtitle"][groups[i]][lang].segList.length
+      let segAmounts = Object.keys(OPTIONS.allSegments["subtitle"][groups[i]]).map(
+        (lang) => OPTIONS.allSegments["subtitle"][groups[i]][lang].segList.length
       );
       if (!segAmounts.every((val, i, arr) => val === arr[0])) {
         debug(
@@ -268,9 +249,7 @@ export async function GenerateSubtitleM3U8(
     }
   }
 
-  debug(
-    `[m3u8generator]: Started Generating the Subtitle Manifest with Mseq:[${OPTIONS.mseq}]...`
-  );
+  debug(`[m3u8generator]: Started Generating the Subtitle Manifest with Mseq:[${OPTIONS.mseq}]...`);
 
   let m3u8 = "#EXTM3U\n";
   m3u8 += "#EXT-X-VERSION:6\n";
@@ -284,11 +263,7 @@ export async function GenerateSubtitleM3U8(
     // Add support later, live streams might use recorder with ad breaks?
   }
 
-  for (
-    let i = 0;
-    i < OPTIONS.allSegments["subtitle"][GROUP][LANG].segList.length;
-    i++
-  ) {
+  for (let i = 0; i < OPTIONS.allSegments["subtitle"][GROUP][LANG].segList.length; i++) {
     const seg = OPTIONS.allSegments["subtitle"][GROUP][LANG].segList[i];
     m3u8 += _segmentToString(seg);
   }
@@ -318,8 +293,7 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
       bw = streamItem.get("bandwidth");
     }
     if (streamItem.get("resolution")) {
-      resolution =
-        streamItem.get("resolution")[0] + "x" + streamItem.get("resolution")[1];
+      resolution = streamItem.get("resolution")[0] + "x" + streamItem.get("resolution")[1];
     }
     if (streamItem.get("codecs")) {
       codecs = streamItem.get("codecs");
