@@ -27,13 +27,6 @@ const rec_opts: IRecorderOptions = {
   vod: true,
 };
 const recorder = new HLSRecorder(URI8, rec_opts);
-recorder.on("mseq-increment", async (data: { allPlaylistSegments: ISegments }) => {
-  console.log(`recorder 1 event! PING`);
-});
-recorder.on("error", (err: any) => {
-  console.log(`ERROR -> ${JSON.stringify(err)}`);
-  throw new Error("Something Bad Happend (>.<)");
-});
 recorder.on(
   "mseq-increment",
   async (data: { allPlaylistSegments: ISegments }) => {
