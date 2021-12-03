@@ -242,6 +242,7 @@ export class HLSRecorder extends EventEmitter {
           dseq: this.recorderM3U8DseqCount,
           targetDuration: this.recorderM3U8TargetDuration,
           allSegments: this.segments,
+          playlistType: this.sourcePlaylistType
         };
         await _handleMediaManifest(req, res, next, data);
       } else if ((m = req.params.file.match(/master-(\S+)track_(\S+)_(\S+).m3u8/))) {
@@ -252,6 +253,7 @@ export class HLSRecorder extends EventEmitter {
           dseq: this.recorderM3U8DseqCount,
           targetDuration: this.recorderM3U8TargetDuration,
           allSegments: this.segments,
+          playlistType: this.sourcePlaylistType
         };
         if (m[1] === "audio") {
           await _handleAudioManifest(req, res, next, data);

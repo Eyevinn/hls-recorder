@@ -12,6 +12,7 @@ export interface IRecData {
   dseq?: number;
   targetDuration: number;
   allSegments: ISegments;
+  playlistType?: number;
 }
 
 export async function _handleMasterManifest(

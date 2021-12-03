@@ -22,11 +22,11 @@ const URI7 = "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u
 const URI8 = "https://lab-live.cdn.eyevinn.technology/ED_V4/master.m3u8";
 
 const rec_opts: IRecorderOptions = {
-  recordDuration: -1,
+  recordDuration: 120,
   windowSize: -1, // -1 for infinite* (max cap defaults at 30 000 seconds/5 minutes if source is a live manifest. To overwrite the max cap, just specify a windowsize.)
   vod: true,
 };
-const recorder = new HLSRecorder(URI8, rec_opts);
+const recorder = new HLSRecorder(URI2, rec_opts);
 recorder.on(
   "mseq-increment",
   async (data: { allPlaylistSegments: ISegments }) => {
