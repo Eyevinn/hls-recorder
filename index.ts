@@ -242,7 +242,7 @@ export class HLSRecorder extends EventEmitter {
           dseq: this.recorderM3U8DseqCount,
           targetDuration: this.recorderM3U8TargetDuration,
           allSegments: this.segments,
-          playlistType: this.sourcePlaylistType
+          playlistType: this.sourcePlaylistType,
         };
         await _handleMediaManifest(req, res, next, data);
       } else if ((m = req.params.file.match(/master-(\S+)track_(\S+)_(\S+).m3u8/))) {
@@ -253,7 +253,7 @@ export class HLSRecorder extends EventEmitter {
           dseq: this.recorderM3U8DseqCount,
           targetDuration: this.recorderM3U8TargetDuration,
           allSegments: this.segments,
-          playlistType: this.sourcePlaylistType
+          playlistType: this.sourcePlaylistType,
         };
         if (m[1] === "audio") {
           await _handleAudioManifest(req, res, next, data);
@@ -485,10 +485,14 @@ export class HLSRecorder extends EventEmitter {
       }
       await this._loadM3u8Segments();
       if (this.targetWindowSize !== -1) {
-        debug(`Current Window Size-> [ ${this.currentWindowSize} ] seconds`);
+        debug(
+          `Current Window Size-> [ ${this.currentWindowSize} ] seconds. Target Window Size-> [${this.targetWindowSize}]`
+        );
       }
       if (this.targetRecordDuration !== -1) {
-        debug(`Current Recording Duration-> [ ${this.currentRecordDuration} ] seconds`);
+        debug(
+          `Current Recording Duration-> [ ${this.currentRecordDuration} ] seconds. Target Recording Duration-> [${this.targetRecordDuration}]`
+        );
       }
 
       if (!this.segments["video"][Object.keys(this.segments["video"])[0]]) {
@@ -613,8 +617,9 @@ export class HLSRecorder extends EventEmitter {
     } else if (this.sourcePlaylistType === PlaylistType.LIVE) {
       // If no window size was entered by the user and HLS Stream type is Live,
       // then default a window size of 5 min.
-      if (this.targetWindowSize !== -1) {
+      if (this.targetWindowSize === -1) {
         this.targetWindowSize = DEFAULT_MAX_WINDOW_SIZE;
+        this.currentWindowSize = this._getCurrentWindowSize();
       }
     }
     debug(`Segment loading successful!`);
@@ -1516,5 +1521,18 @@ export class HLSRecorder extends EventEmitter {
       }
     }
     return LIST;
+  }
+
+  _getCurrentWindowSize(): number {
+    let totalDurationInSeconds: number = 0;
+    const bandwidth = Object.keys(this.segments["video"]);
+    if (bandwidth.length > 0) {
+      this.segments["video"][bandwidth[0]].segList.map((seg) => {
+        if (seg.duration) {
+          totalDurationInSeconds += seg.duration;
+        }
+      });
+    }
+    return totalDurationInSeconds;
   }
 }
