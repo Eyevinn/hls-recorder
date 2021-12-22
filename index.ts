@@ -656,7 +656,7 @@ export class HLSRecorder extends EventEmitter {
           }
         } else {
           // Compare by mseq counts and segment amount
-          if (this.segments["video"][bw] && this.segments["video"][bw].mediaSeq) {
+          if (this.segments["video"][bw] && this.segments["video"][bw].mediaSeq !== undefined) {
             const segCountDiff = this.currSourceSegCount - this.prevSourceSegCount;
             const mseqDiff = sourceMediaSeq - this.segments["video"][bw].mediaSeq;
             let pushAmount;
@@ -759,7 +759,7 @@ export class HLSRecorder extends EventEmitter {
           if (
             this.segments["audio"][audioGroup] &&
             this.segments["audio"][audioGroup][audioLanguage] &&
-            this.segments["audio"][audioGroup][audioLanguage].mediaSeq
+            this.segments["audio"][audioGroup][audioLanguage].mediaSeq !== undefined
           ) {
             const segCountDiff = sourceSegCount - this.prevSourceSegCount;
             const mseqDiff =
@@ -850,7 +850,7 @@ export class HLSRecorder extends EventEmitter {
           if (
             this.segments["subtitle"][subtitleGroup] &&
             this.segments["subtitle"][subtitleGroup][subtitleLanguage] &&
-            this.segments["subtitle"][subtitleGroup][subtitleLanguage].mediaSeq
+            this.segments["subtitle"][subtitleGroup][subtitleLanguage].mediaSeq !== undefined
           ) {
             const segCountDiff = sourceSegCount - this.prevSourceSegCount;
             const mseqDiff =
