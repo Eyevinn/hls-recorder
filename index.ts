@@ -24,8 +24,6 @@ import {
   IRecData,
 } from "./util/handlers.js";
 
-const timer = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
 export interface IRecorderOptions {
   recordDuration?: number; // how long in seconds before ending event-stream
   windowSize?: number; // sliding window size
@@ -292,7 +290,7 @@ export class HLSRecorder extends EventEmitter {
       try {
         if (this.engine) {
           this.engine.start();
-          await timer(3000);
+          await this._timer(3000);
         }
         // Try to require manifest at set interval
         await this.startPlayhead();
@@ -417,14 +415,14 @@ export class HLSRecorder extends EventEmitter {
           continue;
         }
 
-        // Set the timer
+        // Set the this._timer
         let tickInterval = 0;
         tickInterval = segmentDurationMs - (tsIncrementEnd - tsIncrementBegin);
         tickInterval = tickInterval < 2 ? 2 : tickInterval;
 
         debug(`Playhead going to ping again after ${tickInterval}ms`);
 
-        await timer(tickInterval);
+        await this._timer(tickInterval);
       } catch (err) {
         debug(`Playhead consumer crashed`);
         console.error(err);
@@ -1345,7 +1343,7 @@ export class HLSRecorder extends EventEmitter {
           `ALERT! Promises I: Failed, Rejection Found! Trying again...(tries left=${FETCH_ATTEMPTS})`
         );
         FETCH_ATTEMPTS--;
-        await timer(1500);
+        await this._timer(1500);
         continue;
       }
 
@@ -1365,7 +1363,7 @@ export class HLSRecorder extends EventEmitter {
         FETCH_ATTEMPTS--;
         // Wait a little before trying again
         debug(`[ALERT! Live Source Data NOT in sync! Will try again after 1500ms`);
-        await timer(1500);
+        await this._timer(1500);
         this.timerCompensation = false; // TODO: implement this right
         continue;
       }
@@ -1534,5 +1532,9 @@ export class HLSRecorder extends EventEmitter {
       });
     }
     return totalDurationInSeconds;
+  }
+
+  _timer(ms: number): Promise<void> {
+    return new Promise((res) => setTimeout(res, ms));
   }
 }
