@@ -30,8 +30,8 @@ const recorder = new HLSRecorder(URI2, rec_opts);
 recorder.on(
   "mseq-increment",
   async (data: { allPlaylistSegments: ISegments }) => {
-    const varaints = Object.keys(data.allPlaylistSegments["video"]);
-    const level0 = varaints[0];
+    const variants = Object.keys(data.allPlaylistSegments["video"]);
+    const level0 = variants[0];
     console.log(
       `Recorded Segments: ${JSON.stringify(
         data.allPlaylistSegments["video"][level0],

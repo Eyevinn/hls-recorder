@@ -8,7 +8,7 @@
     "dev": "node dist/demo.js",
     "postversion": "git push && git push --tags",
     "coverage": "nyc npm test && nyc report",
-    "test": "echo \"WARN: no test specified\" && exit 0"
+    "test": "ts-node node_modules/jasmine/bin/jasmine"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "repository": {
