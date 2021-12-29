@@ -1,3 +1,4 @@
+
 export interface IVideoTracks {
   bandwidth: number;
   width: number;
@@ -8,7 +9,7 @@ export interface IVideoTracks {
   subtitle?: string;
 }
 
-export interface IMultiVariantOptions {
+export interface ISetMultiVariantInput {
   videoTracks: IVideoTracks[];
   audioTracks?: IExtraTracks[];
   subtitleTracks?: IExtraTracks[];
@@ -20,20 +21,31 @@ export interface IExtraTracks {
   name: string;
   default: boolean;
 }
-export interface ILiveStreamPlaylistMetadata {
-  VARIANT?: string;
-  MSEQ: number;
-  DSEQ: number;
-  TARGET_DUR: number;
-  START_ON: number;
-  END_ON: number;
-}
+
 export enum EnumStreamType {
   "NONE" = 0,
   "EVENT" = 1,
   "LIVE" = 2,
+  "VOD" = 3,
 }
 
+export interface IInsertAtInput {
+  replacementString: string;
+  targetSegmentIndex: number;
+  stopAfter: boolean;
+}
+
+export interface IGetMediaPlaylistM3U8Options {
+  keyString?: string;
+  mapString?: string;
+}
+export interface ISetInitPlaylistDataInput {
+  MSEQ: number,         // starting media-sequence value
+  DSEQ: number,         // starting discontinuity-sequence value
+  TARGET_DUR: number,   // duration for each segment in playlist
+  START_ON: number,     // top segment in playlist has this index value
+  END_ON: number,       // last segment in playlist has this index value
+}
 /*
 Mock Live HLS M3U8 Maker
   o     _______________________________
@@ -46,9 +58,10 @@ export class MockLiveM3U8Generator {
   header: string;
   multiVariantM3u8: string;
   //eventStreamData: ILiveStreamPlaylistMetadata | null;
-  liveStreamData: { [key: string]: ILiveStreamPlaylistMetadata } | any;
+  liveStreamData: { [key: string]: ISetInitPlaylistDataInput } | any;
   targetSegment: number;
   replacementString: string;
+  breakLoop: boolean;
 
   constructor() {
     this.header = `#EXTM3U
@@ -57,22 +70,23 @@ export class MockLiveM3U8Generator {
     this.targetSegment = -1;
     this.replacementString = "";
     this.liveStreamData = {};
+    this.breakLoop = false;
   }
 
-  shiftSegments(variant: string, num: number) {
+  shiftSegments(variant: string, numOfSegs: number) {
     if (this.liveStreamData) {
-      this.liveStreamData[variant].START_ON += num;
-      this.liveStreamData[variant].MSEQ += num;
+      this.liveStreamData[variant].START_ON += numOfSegs;
+      this.liveStreamData[variant].MSEQ += numOfSegs;
     }
   }
 
-  pushSegments(variant: string, num: number) {
+  pushSegments(variant: string, numOfSegs: number) {
     if (this.liveStreamData) {
-      this.liveStreamData[variant].END_ON += num;
+      this.liveStreamData[variant].END_ON += numOfSegs;
     }
   }
 
-  setInitPlaylistData(initData: any) {
+  setInitPlaylistData(initData: ISetInitPlaylistDataInput) {
     if (this.liveStreamData && Object.keys(this.liveStreamData).length > 0) {
       Object.keys(this.liveStreamData).forEach((variant) => {
         if (this.liveStreamData && this.liveStreamData[variant]) {
@@ -82,13 +96,21 @@ export class MockLiveM3U8Generator {
     }
   }
 
-  insertAt(data: string, segIdx: number) {
-    this.targetSegment = segIdx;
-    this.replacementString = data;
+  /**
+   * Will insert the replacement string at given segment index when building
+   * the manifest string. You do not need to add a first '\n' as it is prefixed
+   * internally. If you want to prevent adding more segments after the given
+   * index then set stopAfter to true.
+   * @param input
+   */
+  insertAt(input: IInsertAtInput) {
+    this.targetSegment = input.targetSegmentIndex;
+    this.replacementString = input.replacementString;
+    this.breakLoop = input.stopAfter;
   }
 
-  getMediaPlaylistM3U8(type: EnumStreamType, variant: string, useKey?: boolean, useMap?: boolean) {
-    let data: ILiveStreamPlaylistMetadata;
+  getMediaPlaylistM3U8(type: EnumStreamType, variant: string, opts?: IGetMediaPlaylistM3U8Options) {
+    let data: ISetInitPlaylistDataInput;
     if (!this.liveStreamData) {
       return "Error";
     }
@@ -97,25 +119,31 @@ export class MockLiveM3U8Generator {
     manifest += this.header;
     if (type === EnumStreamType.EVENT) {
       manifest += `\n#EXT-X-PLAYLIST-TYPE:EVENT`;
+    } else if (type === EnumStreamType.VOD) {
+      manifest += `\n#EXT-X-PLAYLIST-TYPE:VOD`;
     }
     manifest += `\n#EXT-X-TARGETDURATION:${data.TARGET_DUR}`;
     manifest += `\n#EXT-X-DISCONTINUITY-SEQUENCE:${data.DSEQ}`;
     manifest += `\n#EXT-X-MEDIA-SEQUENCE:${data.MSEQ}`;
 
-    if (useMap) {
-      manifest += `\n#EXT-X-MAP:URI="mock-init.mp4"`;
+    if (opts && opts.mapString) {
+      manifest += `\n${opts.mapString}`;
     }
-    if (useKey) {
-      manifest += `\n#EXT-X-KEY:METHOD=AES-128,URI="mock-key.bin"`;
+    if (opts && opts.keyString) {
+      manifest += `\n${opts.keyString}`;
     }
 
     for (let i = data.START_ON; i < data.END_ON; i++) {
+      // Do something Special at this segment?
       if (this.targetSegment === i) {
-        manifest += this.replacementString;
-        break;
+        manifest += "\n" + this.replacementString;
+        if (this.breakLoop) {
+          break;
+        }
       }
+      // Add usual segment data
       manifest += `\n#EXTINF:${data.TARGET_DUR}`;
-      if (useMap) {
+      if (opts && opts.mapString) {
         manifest += `\n${variant}-seg_${i}.m4s`;
       } else {
         manifest += `\n${variant}-seg_${i}.ts`;
@@ -125,7 +153,7 @@ export class MockLiveM3U8Generator {
     return manifest;
   }
 
-  setMultiVariant(opts: IMultiVariantOptions): void {
+  setMultiVariant(opts: ISetMultiVariantInput): void {
     let manifest = "";
     manifest += this.header;
 
