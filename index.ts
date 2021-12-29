@@ -121,6 +121,11 @@ export enum PlaylistType {
   LIVE = 2,
   EVENT = 3,
 }
+export interface IMseqIncrementEventPayload {
+  allPlaylistSegments: ISegments;
+  type: PlaylistType;
+  cookieJar: CookieJar;
+}
 
 const FAIL_TIMEOUT: number = 3000;
 const DEFAULT_MAX_WINDOW_SIZE: number = 5 * 60;
@@ -1362,7 +1367,7 @@ export class HLSRecorder extends EventEmitter {
         // Decrement fetch counter
         FETCH_ATTEMPTS--;
         // Wait a little before trying again
-        debug(`[ALERT! Live Source Data NOT in sync! Will try again after 1500ms`);
+        debug(`ALERT! Live Source Data NOT in sync! Will try again after 1500ms`);
         await this._timer(1500);
         this.timerCompensation = false; // TODO: implement this right
         continue;
