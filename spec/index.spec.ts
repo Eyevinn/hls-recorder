@@ -1,5 +1,5 @@
 const nock = require("nock");
-import { HLSRecorder, IMseqIncrementEventPayload, ISegments, PlaylistType } from "..";
+import { HLSRecorder, IMseqIncrementEventPayload, ISegments } from "..";
 import {
   MockLiveM3U8Generator,
   EnumStreamType,
@@ -317,7 +317,7 @@ describe("HLSRecorder", () => {
   });
   it("should record Live type HLS stream, and if no window size is set, it should still slide according to default window size", async () => {
     let LAST_RETURNED_EVENT_DATA: IMseqIncrementEventPayload | any;
-    const targetEndlistIndex = 200;
+    const targetEndlistIndex = 100;
     const DEFAULT_MAX_WINDOW_SIZE = 5 * 60;
     // Mock Source Becomming a VOD,
     // will slap on an endlist tag at this seg index
@@ -350,8 +350,8 @@ describe("HLSRecorder", () => {
 
       expect(segList.length).toBe(DEFAULT_MAX_WINDOW_SIZE / 10 + 1);
       // Check First Segment
-      expect(segList[0].index).toBe(171);
-      expect(segList[0].uri).toBe(`https://mock.mock.com/live/video-${bw}-seg_${170}.ts`);
+      expect(segList[0].index).toBe(71);
+      expect(segList[0].uri).toBe(`https://mock.mock.com/live/video-${bw}-seg_${70}.ts`);
       // Check Second-to-Last Segment
       expect(segList[lastIdx - 1].index).toBe(targetEndlistIndex);
       expect(segList[lastIdx - 1].uri).toBe(
@@ -363,6 +363,59 @@ describe("HLSRecorder", () => {
       expect(LAST_RETURNED_EVENT_DATA.allPlaylistSegments["video"][bw].mediaSeq).toBe(
         targetEndlistIndex - 5 - 1
       );
+    });
+  });
+  it("should record Live type HLS stream, and handle DISCONTINUITY tags", async () => {
+    let LAST_RETURNED_EVENT_DATA: IMseqIncrementEventPayload | any;
+    const placeDiscTagsAtTheseIndexes = [3, 6, 9, 12, 15, 18, 21];
+
+    placeDiscTagsAtTheseIndexes.forEach((index) =>
+      mockHLSSource.insertAt({
+        replacementString: "#EXT-X-DISCONTINUITY",
+        targetSegmentIndex: index,
+        stopAfter: false,
+      })
+    );
+
+    const recorder = new HLSRecorder(mockLiveUri, {
+      recordDuration: 200,
+      windowSize: 60,
+      vod: true,
+    });
+    recorder.on("mseq-increment", async (data: IMseqIncrementEventPayload) => {
+      LAST_RETURNED_EVENT_DATA = data;
+    });
+    recorder.on("error", (err: any) => {
+      throw new Error("Something Bad Happend (>.<)" + err);
+    });
+
+    spyOn(recorder, "_timer").and.callFake(() => Promise.resolve());
+    await recorder.start();
+
+    const videoVariants = LAST_RETURNED_EVENT_DATA.allPlaylistSegments["video"];
+    const bandwidths = Object.keys(videoVariants);
+    bandwidths.forEach((bw) => {
+      const segList = videoVariants[bw].segList;
+      const lastIdx = segList.length - 1;
+
+      expect(recorder.recorderM3U8DseqCount).toBe(4);
+      expect(segList.length).toBe(7);
+      // Check First Segment
+      expect(segList[0].index).toBe(15);
+      expect(segList[0].uri).toBe(`https://mock.mock.com/live/video-${bw}-seg_${14}.ts`);
+      expect(segList[0].discontinuity).toBe(undefined);
+      expect(segList[1].index).toBe(16);
+      expect(segList[1].uri).toBe(`https://mock.mock.com/live/video-${bw}-seg_${15}.ts`);
+      expect(segList[1].discontinuity).toBe(true);
+      // Check Second-to-Last Segment
+      expect(segList[lastIdx - 1].index).toBe(20);
+      expect(segList[lastIdx - 1].uri).toBe(
+        `https://mock.mock.com/live/video-${bw}-seg_${20 - 1}.ts`
+      );
+      // Check Last Segment
+      expect(segList[lastIdx].index).toBe(null);
+      expect(segList[lastIdx].endlist).toBe(true);
+      expect(LAST_RETURNED_EVENT_DATA.allPlaylistSegments["video"][bw].mediaSeq).toBe(14);
     });
   });
 });
@@ -1635,7 +1688,6 @@ describe("HLSRecorder, when source is not perfect,", () => {
     jasmine.clock().uninstall();
     nock.cleanAll();
   });
-
   it("should record Live type HLS stream, and handle if source mseq increases more than 1 step", async () => {
     let LAST_RETURNED_EVENT_DATA: any;
     const targetEndlistIndex = 21;
@@ -1857,7 +1909,196 @@ describe("HLSRecorder, when source is not perfect,", () => {
   });
 });
 
-// TODO: Test Channel Engine Support
+describe("HLSRecorder, when source is only a media manifest,", () => {
+  beforeEach(() => {
+    jasmine.clock().install();
+  });
+  afterEach(() => {
+    jasmine.clock().uninstall();
+    nock.cleanAll();
+  });
+  it("should record Live type HLS stream, and handle when target recording duration is reached", async () => {
+    let LAST_RETURNED_EVENT_DATA: IMseqIncrementEventPayload | any;
+    nock.cleanAll();
+    const _mockHLSSource = new MockLiveM3U8Generator();
+    const config: ISetMultiVariantInput = {
+      videoTracks: vTracks,
+      audioTracks: [],
+      subtitleTracks: [],
+    };
+    _mockHLSSource.setMultiVariant(config);
+    _mockHLSSource.setInitPlaylistData({
+      MSEQ: 1,
+      DSEQ: 0,
+      TARGET_DUR: 10,
+      START_ON: 0,
+      END_ON: 6,
+    });
+    nock(mockBaseUri)
+      .persist()
+      .get("/live/level_0.m3u8")
+      .reply(200, () => {
+        const m3u8 = _mockHLSSource.getMediaPlaylistM3U8(EnumStreamType.LIVE, "video-500500");
+        _mockHLSSource.pushSegments("video-500500", 1);
+        _mockHLSSource.shiftSegments("video-500500", 1);
+        return m3u8;
+      });
+    const recorder = new HLSRecorder(mockBaseUri + "live/level_0.m3u8", {
+      recordDuration: 120,
+      windowSize: -1,
+      vod: true,
+    });
+    recorder.on("mseq-increment", async (data: IMseqIncrementEventPayload) => {
+      LAST_RETURNED_EVENT_DATA = data;
+    });
+    recorder.on("error", (err: any) => {
+      throw new Error("Something Bad Happend (>.<)" + err);
+    });
+
+    spyOn(recorder, "_timer").and.callFake(() => Promise.resolve());
+    await recorder.start();
+
+    const videoVariants = LAST_RETURNED_EVENT_DATA.allPlaylistSegments["video"];
+    const bandwidths = Object.keys(videoVariants);
+    bandwidths.forEach((bw) => {
+      const segList = videoVariants[bw].segList;
+      const lastIdx = segList.length - 1;
+
+      expect(segList[0].index).toBe(1);
+      expect(segList[0].uri).toBe(`https://mock.mock.com/live/video-500500-seg_1.ts`); // <-- 1 not 0, since HLSRecorder will send req to nock twice in one iteration for this case
+      expect(segList[lastIdx - 1].index).toBe(12);
+      expect(segList[lastIdx - 1].uri).toBe(`https://mock.mock.com/live/video-500500-seg_12.ts`);
+      expect(segList[lastIdx].index).toBe(null);
+      expect(segList[lastIdx].endlist).toBe(true);
+      expect(LAST_RETURNED_EVENT_DATA.allPlaylistSegments["video"][bw].mediaSeq).toBe(8);
+    });
+  });
+  it("should record Event type HLS stream, and handle when Event ends", async () => {
+    let LAST_RETURNED_EVENT_DATA: IMseqIncrementEventPayload | any;
+    nock.cleanAll();
+    const _mockHLSSource = new MockLiveM3U8Generator();
+    const config: ISetMultiVariantInput = {
+      videoTracks: vTracks,
+      audioTracks: [],
+      subtitleTracks: [],
+    };
+    _mockHLSSource.setMultiVariant(config);
+    _mockHLSSource.setInitPlaylistData({
+      MSEQ: 1,
+      DSEQ: 0,
+      TARGET_DUR: 10,
+      START_ON: 0,
+      END_ON: 6,
+    });
+    _mockHLSSource.insertAt({
+      replacementString: "#EXT-X-ENDLIST",
+      targetSegmentIndex: 20,
+      stopAfter: true,
+    });
+    nock(mockBaseUri)
+      .persist()
+      .get("/live/level_0.m3u8")
+      .reply(200, () => {
+        const m3u8 = _mockHLSSource.getMediaPlaylistM3U8(EnumStreamType.LIVE, "video-500500");
+        _mockHLSSource.pushSegments("video-500500", 1);
+        return m3u8;
+      });
+    const recorder = new HLSRecorder(mockBaseUri + "live/level_0.m3u8", {
+      recordDuration: -1,
+      windowSize: -1,
+      vod: true,
+    });
+    recorder.on("mseq-increment", async (data: IMseqIncrementEventPayload) => {
+      LAST_RETURNED_EVENT_DATA = data;
+    });
+    recorder.on("error", (err: any) => {
+      throw new Error("Something Bad Happend (>.<)" + err);
+    });
+
+    spyOn(recorder, "_timer").and.callFake(() => Promise.resolve());
+    await recorder.start();
+
+    const videoVariants = LAST_RETURNED_EVENT_DATA.allPlaylistSegments["video"];
+    const bandwidths = Object.keys(videoVariants);
+    bandwidths.forEach((bw) => {
+      const segList = videoVariants[bw].segList;
+      const lastIdx = segList.length - 1;
+
+      expect(segList[0].index).toBe(1);
+      expect(segList[0].uri).toBe(`https://mock.mock.com/live/video-500500-seg_0.ts`);
+      expect(segList[lastIdx - 1].index).toBe(20);
+      expect(segList[lastIdx - 1].uri).toBe(
+        `https://mock.mock.com/live/video-500500-seg_${20 - 1}.ts`
+      );
+      expect(segList[lastIdx].index).toBe(null);
+      expect(segList[lastIdx].endlist).toBe(true);
+      expect(LAST_RETURNED_EVENT_DATA.allPlaylistSegments["video"][bw].mediaSeq).toBe(1);
+    });
+  });
+  it("should record VOD type HLS stream, and handle it", async () => {
+    let LAST_RETURNED_EVENT_DATA: IMseqIncrementEventPayload | any;
+    nock.cleanAll();
+    const _mockHLSSource = new MockLiveM3U8Generator();
+    const config: ISetMultiVariantInput = {
+      videoTracks: vTracks,
+      audioTracks: [],
+      subtitleTracks: [],
+    };
+    _mockHLSSource.setMultiVariant(config);
+    _mockHLSSource.setInitPlaylistData({
+      MSEQ: 1,
+      DSEQ: 0,
+      TARGET_DUR: 10,
+      START_ON: 0,
+      END_ON: 21,
+    });
+    _mockHLSSource.insertAt({
+      replacementString: "#EXT-X-ENDLIST",
+      targetSegmentIndex: 20,
+      stopAfter: true,
+    });
+    nock(mockBaseUri)
+      .persist()
+      .get("/live/level_0.m3u8")
+      .reply(200, () => {
+        const m3u8 = _mockHLSSource.getMediaPlaylistM3U8(EnumStreamType.LIVE, "video-500500");
+        return m3u8;
+      });
+    const recorder = new HLSRecorder(mockBaseUri + "live/level_0.m3u8", {
+      recordDuration: -1,
+      windowSize: -1,
+      vod: true,
+    });
+    recorder.on("mseq-increment", async (data: IMseqIncrementEventPayload) => {
+      LAST_RETURNED_EVENT_DATA = data;
+    });
+    recorder.on("error", (err: any) => {
+      throw new Error("Something Bad Happend (>.<)" + err);
+    });
+
+    spyOn(recorder, "_timer").and.callFake(() => Promise.resolve());
+    await recorder.start();
+
+    const videoVariants = LAST_RETURNED_EVENT_DATA.allPlaylistSegments["video"];
+    const bandwidths = Object.keys(videoVariants);
+    bandwidths.forEach((bw) => {
+      const segList = videoVariants[bw].segList;
+      const lastIdx = segList.length - 1;
+
+      expect(segList[0].index).toBe(1);
+      expect(segList[0].uri).toBe(`https://mock.mock.com/live/video-500500-seg_0.ts`);
+      expect(segList[lastIdx - 1].index).toBe(20);
+      expect(segList[lastIdx - 1].uri).toBe(
+        `https://mock.mock.com/live/video-500500-seg_${20 - 1}.ts`
+      );
+      expect(segList[lastIdx].index).toBe(null);
+      expect(segList[lastIdx].endlist).toBe(true);
+      expect(LAST_RETURNED_EVENT_DATA.allPlaylistSegments["video"][bw].mediaSeq).toBe(1);
+    });
+  });
+});
+
+// TODO: Test error/failing cases
 describe("HLSRecorder, when ", () => {
   beforeEach(() => {
     jasmine.clock().install();
@@ -1869,7 +2110,8 @@ describe("HLSRecorder, when ", () => {
 
   it("should record Live type HLS stream, ----- ", async () => {});
 });
-// TODO: Test error/failing cases
+
+// TODO: Test Channel Engine Support
 describe("HLSRecorder, when ", () => {
   beforeEach(() => {
     jasmine.clock().install();

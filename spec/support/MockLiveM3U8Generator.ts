@@ -1,4 +1,3 @@
-
 export interface IVideoTracks {
   bandwidth: number;
   width: number;
@@ -40,11 +39,11 @@ export interface IGetMediaPlaylistM3U8Options {
   mapString?: string;
 }
 export interface ISetInitPlaylistDataInput {
-  MSEQ: number,         // starting media-sequence value
-  DSEQ: number,         // starting discontinuity-sequence value
-  TARGET_DUR: number,   // duration for each segment in playlist
-  START_ON: number,     // top segment in playlist has this index value
-  END_ON: number,       // last segment in playlist has this index value
+  MSEQ: number; // starting media-sequence value
+  DSEQ: number; // starting discontinuity-sequence value
+  TARGET_DUR: number; // duration for each segment in playlist
+  START_ON: number; // top segment in playlist has this index value
+  END_ON: number; // last segment in playlist has this index value
 }
 /*
 Mock Live HLS M3U8 Maker
@@ -62,6 +61,7 @@ export class MockLiveM3U8Generator {
   targetSegment: number;
   replacementString: string;
   breakLoop: boolean;
+  vipSegments: { [segNumber: number]: { replacementStr: string; stopAfter: boolean } };
 
   constructor() {
     this.header = `#EXTM3U
@@ -71,12 +71,27 @@ export class MockLiveM3U8Generator {
     this.replacementString = "";
     this.liveStreamData = {};
     this.breakLoop = false;
+    this.vipSegments = {};
   }
 
   shiftSegments(variant: string, numOfSegs: number) {
     if (this.liveStreamData) {
       this.liveStreamData[variant].START_ON += numOfSegs;
       this.liveStreamData[variant].MSEQ += numOfSegs;
+
+      if (Object.keys(this.vipSegments).length > 0) {
+        let numDiscTagsPassed = 0;
+        let oldDiscTags: string[] = Object.keys(this.vipSegments);
+        oldDiscTags = oldDiscTags.filter(
+          (index) => this.vipSegments[parseInt(index)].replacementStr === "#EXT-X-DISCONTINUITY"
+        );
+        oldDiscTags.forEach((index) => {
+          if (index < this.liveStreamData[variant].START_ON) {
+            numDiscTagsPassed++;
+          }
+        });
+        this.liveStreamData[variant].DSEQ = numDiscTagsPassed;
+      }
     }
   }
 
@@ -104,9 +119,10 @@ export class MockLiveM3U8Generator {
    * @param input
    */
   insertAt(input: IInsertAtInput) {
-    this.targetSegment = input.targetSegmentIndex;
-    this.replacementString = input.replacementString;
-    this.breakLoop = input.stopAfter;
+    this.vipSegments[input.targetSegmentIndex] = {
+      replacementStr: input.replacementString,
+      stopAfter: input.stopAfter,
+    };
   }
 
   getMediaPlaylistM3U8(type: EnumStreamType, variant: string, opts?: IGetMediaPlaylistM3U8Options) {
@@ -135,9 +151,9 @@ export class MockLiveM3U8Generator {
 
     for (let i = data.START_ON; i < data.END_ON; i++) {
       // Do something Special at this segment?
-      if (this.targetSegment === i) {
-        manifest += "\n" + this.replacementString;
-        if (this.breakLoop) {
+      if (Object.keys(this.vipSegments).includes(i.toString())) {
+        manifest += "\n" + this.vipSegments[i].replacementStr;
+        if (this.vipSegments[i].stopAfter) {
           break;
         }
       }
