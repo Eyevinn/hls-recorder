@@ -8,7 +8,7 @@
     "dev": "node dist/demo.js",
     "postversion": "git push && git push --tags",
     "coverage": "nyc npm test && nyc report",
-    "test": "echo \"WARN: no test specified\" && exit 0"
+    "test": "ts-node node_modules/jasmine/bin/jasmine"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "repository": {
@@ -24,6 +24,7 @@
   "dependencies": {
     "@eyevinn/m3u8": "^0.4.4",
     "@types/debug": "^4.1.7",
+    "@types/jasmine": "^3.10.2",
     "@types/node": "^16.11.6",
     "@types/node-fetch": "^3.0.3",
     "@types/promise.allsettled": "^1.0.3",
@@ -31,11 +32,14 @@
     "abort-controller": "^3.0.0",
     "debug": "^4.3.2",
     "events": "^3.3.0",
+    "jasmine": "^3.10.0",
+    "jasmine-ts": "^0.4.0",
     "node-fetch": "^2.6.6",
     "node-fetch-cookies": "^2.0.3",
     "promise.allsettled": "^1.0.5",
     "restify": "^8.6.0",
     "string-to-stream": "^3.0.1",
+    "ts-node": "^10.4.0",
     "url": "^0.11.0"
   }
 }
