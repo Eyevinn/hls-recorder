@@ -22,7 +22,7 @@
     "typescript": "^4.4.3"
   },
   "dependencies": {
-    "@eyevinn/m3u8": "^0.4.4",
+    "@eyevinn/m3u8": "^0.5.2",
     "@types/debug": "^4.1.7",
     "@types/jasmine": "^3.10.2",
     "@types/node": "^16.11.6",
