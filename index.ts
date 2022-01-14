@@ -4,7 +4,6 @@ import allSettled from "promise.allsettled";
 import restify from "restify";
 import url from "url";
 import { AbortController } from "abort-controller";
-/// <reference path="../types/node-fetch-cookies/index.d.ts"/>
 import { fetch, CookieJar } from "./util/node-fetch-cookies/src/";
 import Debug from "debug";
 const debug = Debug("hls-recorder");
@@ -58,6 +57,10 @@ export type Segment = {
     byterange: string;
   } | null;
   datetime?: string | null;
+  startOffset?: {
+    timeOffset: number;
+    precise: boolean;
+  } | null;
 };
 
 interface IVideoSegments {
@@ -958,6 +961,17 @@ export class HLSRecorder extends EventEmitter {
       }
     }
 
+    // for all EXT-X-START related tags.
+    let startTimeOffset = playlistItem.get("start-timeoffset");
+    let startPrecise = playlistItem.get("start-precise");
+    let startOffset =
+      startTimeOffset || startPrecise
+        ? {
+            timeOffset: typeof startTimeOffset !== "undefined" ? startTimeOffset : null,
+            precise: typeof startPrecise !== "undefined" ? startPrecise : null,
+          }
+        : null;
+
     // For Normal EXTINF + url
     let segmentUri: string = "";
     if (playlistItem.properties.uri) {
@@ -979,6 +993,9 @@ export class HLSRecorder extends EventEmitter {
       map: map ? map : null,
     };
 
+    if (startOffset) {
+      segment["startOffset"] = startOffset;
+    }
     // for EXT-X-DISCONTINUITY
     if (playlistItem.properties.discontinuity) {
       segment["discontinuity"] = true;

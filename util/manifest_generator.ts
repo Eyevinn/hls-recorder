@@ -25,6 +25,13 @@ const _segmentToString = (seg: Segment): string => {
   if (seg.endlist) {
     m3u8 += "#EXT-X-ENDLIST\n";
   }
+  if (seg.startOffset) {
+    m3u8 += `#EXT-X-START:TIME-OFFSET=${seg.startOffset.timeOffset.toFixed(3)}`;
+    if (seg.startOffset.precise) {
+      m3u8 += `,PRECISE=${seg.startOffset.precise ? "YES" : "NO"}`;
+    }
+    m3u8 += "\n";
+  }
   if (seg.map) {
     m3u8 += `#EXT-X-MAP:URI="${seg.map.uri}"`;
     if (seg.map.byterange) {
