@@ -1,7 +1,6 @@
 import { EventEmitter } from "events";
 import str2stream from "string-to-stream";
 import allSettled from "promise.allsettled";
-import restify from "restify";
 import url from "url";
 import { AbortController } from "abort-controller";
 import { fetch, CookieJar } from "./util/node-fetch-cookies/src/";
@@ -235,7 +234,7 @@ export class HLSRecorder extends EventEmitter {
   // -= Public functions =-
   // ----------------------
 
-  addServer() {
+  setRestifyServer(restify: any) {
     // Setup Server [!]
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());

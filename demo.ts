@@ -1,5 +1,6 @@
 import { IRecorderOptions } from "./index.js";
 import { HLSRecorder, ISegments } from "./index";
+
 const timer = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 // Me
@@ -47,9 +48,10 @@ recorder.on("error", (err: any) => {
 });
 
 const run = async () => {
-  recorder.addServer();
   recorder.start();
-  recorder.listen(1377); // Playback at "http://localhost:1377/live/master.m3u8"
+  // const restify = require('restify')
+  // recorder.setRestifyServer(restify);
+  // recorder.listen(1377); // Playback at "http://localhost:1377/live/master.m3u8"
 };
 /**********************
  * Run Driver function

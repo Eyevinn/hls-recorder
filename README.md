@@ -43,11 +43,16 @@ const recorder = new HLSRecorder(engine, opts);
 recorder.on("mseq-increment", mseq => {
   // Do stuff with media seq
 });
-recorder.addServer(); // Create a Restify server instance in recorder
-
-recorder.listen(); // Have server listening on default port 8001
 
 recorder.start(); // Start recording VOD2live stream
+
+/** 
+ * The recording can also be played back, in the form of an event Hls stream.
+ *  If you want to view the recorded stream locally, then use the follwoing lines: 
+ **/
+const restify = require('restify')
+recorder.setRestifyServer(restify); // Create a Restify server instance in recorder
+recorder.listen(); // Have server listening on default port 8001
 
 // View Recorder Stream Playback at: "http://localhost:8001/live/master.m3u8"
 ```
@@ -69,9 +74,15 @@ recorder.on("mseq-increment", mseq => {
   // Do stuff with media seq
 });
 
-recorder.listen(); // Have server listening on default port 8001
-
 recorder.start(); // Start recording live stream
+
+/** 
+ * The recording can also be played back, in the form of an event Hls stream.
+ *  If you want to view the recorded stream locally, then use the follwoing lines: 
+ **/
+const restify = require('restify')
+recorder.setRestifyServer(restify); // Create a Restify server instance in recorder
+recorder.listen(); // Have server listening on default port 8001
 
 // View Recorder Stream Playback at: "http://localhost:8001/live/master.m3u8"
 ```
