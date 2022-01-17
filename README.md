@@ -52,7 +52,7 @@ recorder.start(); // Start recording VOD2live stream
  **/
 const restify = require('restify')
 recorder.setRestifyServer(restify); // Create a Restify server instance in recorder
-recorder.listen(); // Have server listening on default port 8001
+recorder.listen(8001); // Have server listening on port 8001
 
 // View Recorder Stream Playback at: "http://localhost:8001/live/master.m3u8"
 ```
@@ -82,7 +82,7 @@ recorder.start(); // Start recording live stream
  **/
 const restify = require('restify')
 recorder.setRestifyServer(restify); // Create a Restify server instance in recorder
-recorder.listen(); // Have server listening on default port 8001
+recorder.listen(8001); // Have server listening on port 8001
 
 // View Recorder Stream Playback at: "http://localhost:8001/live/master.m3u8"
 ```
