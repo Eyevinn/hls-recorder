@@ -47,6 +47,7 @@ recorder.on("error", (err: any) => {
 });
 
 const run = async () => {
+  recorder.addServer();
   recorder.start();
   recorder.listen(1377); // Playback at "http://localhost:1377/live/master.m3u8"
 };

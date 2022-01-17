@@ -167,7 +167,7 @@ export class HLSRecorder extends EventEmitter {
 
   engine: any; // TODO: use channel engine type defs
   cookieJar: CookieJar;
-  serverStartTime: number;
+  serverStartTime: number | undefined;
   discontinuitySequence: any;
   serverStarted: boolean;
   shouldEmitt: boolean | null;
@@ -229,7 +229,13 @@ export class HLSRecorder extends EventEmitter {
       Options: opts,
     };
     debug(`Recorder Configs->: ${JSON.stringify(recorderConfigs, null, 2)}`);
+  }
 
+  // ----------------------
+  // -= Public functions =-
+  // ----------------------
+
+  addServer() {
     // Setup Server [!]
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
@@ -282,9 +288,6 @@ export class HLSRecorder extends EventEmitter {
     });
   }
 
-  // ----------------------
-  // -= Public functions =-
-  // ----------------------
   listen(port: number) {
     this.server.listen(port, () => {
       debug(`${this.server.name} listening at ${this.server.url}`);

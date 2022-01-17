@@ -43,6 +43,7 @@ const recorder = new HLSRecorder(engine, opts);
 recorder.on("mseq-increment", mseq => {
   // Do stuff with media seq
 });
+recorder.addServer(); // Create a Restify server instance in recorder
 
 recorder.listen(); // Have server listening on default port 8001
 
