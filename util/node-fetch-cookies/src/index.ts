@@ -1,7 +1,7 @@
 const nodeFetch = require("node-fetch");
-import CookieJar from "./cookie-jar.js";
-import Cookie from "./cookie.js";
-import {paramError, CookieParseError} from "./errors.js";
+import CookieJar from "./cookie-jar";
+import Cookie from "./cookie";
+import {paramError, CookieParseError} from "./errors";
 
 const {isRedirect} = nodeFetch;
 

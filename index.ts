@@ -20,7 +20,7 @@ import {
   _handleAudioManifest,
   _handleSubtitleManifest,
   IRecData,
-} from "./util/handlers.js";
+} from "./util/handlers";
 
 export interface IRecorderOptions {
   recordDuration?: number; // how long in seconds before ending event-stream
@@ -151,6 +151,7 @@ export class HLSRecorder extends EventEmitter {
   mediaManifests: IMediaManifestList;
   masterManifest: any;
   playheadState: PlayheadState;
+  playheadStoppedComplete: boolean;
   prevSourceMediaSeq: number;
   prevSourceSegCount: number;
   recorderM3U8TargetDuration: number;
@@ -207,6 +208,7 @@ export class HLSRecorder extends EventEmitter {
     this.recorderM3U8TargetDuration = 0;
     this.recorderM3U8MseqCount = 0;
     this.recorderM3U8DseqCount = 0;
+    this.playheadStoppedComplete = true;
     this.playheadState = PlayheadState.IDLE;
 
     this.sourceMasterManifest = "";
@@ -313,10 +315,19 @@ export class HLSRecorder extends EventEmitter {
 
   stop() {
     return new Promise<string>(async (resolve, reject) => {
+      let loopLimit = 20;
       try {
         debug("Stopping HLS Recorder");
         if (this.sourcePlaylistType !== PlaylistType.VOD) {
+          this.stopPlayhead();
           debug(`Stopping Playhead, creating a VOD, and shutting down the server...`);
+          while (!this.playheadStoppedComplete && loopLimit > 0) {
+            await this._timer(1000);
+            loopLimit--;
+          }
+          if (this.playheadStoppedComplete) {
+            debug(`Playhead has officially stopped!`);
+          }
           if (Object.keys(this.segments["video"]).length > 0) {
             this._addEndlistTag();
             this.emit("mseq-increment", {
@@ -325,7 +336,6 @@ export class HLSRecorder extends EventEmitter {
               cookieJar: this.cookieJar,
             });
           }
-          this.stopPlayhead();
         }
         if (this.serverStarted) {
           this.server.close();
@@ -343,7 +353,7 @@ export class HLSRecorder extends EventEmitter {
   async startPlayhead(): Promise<void> {
     // Init playhead state
     this.playheadState = PlayheadState.RUNNING as PlayheadState;
-
+    this.playheadStoppedComplete = false;
     try {
       // Pre-load
       await this._loadAllManifest();
@@ -367,7 +377,8 @@ export class HLSRecorder extends EventEmitter {
     while (this.playheadState !== (PlayheadState.CRASHED as PlayheadState)) {
       try {
         if (this.playheadState === (PlayheadState.STOPPED as PlayheadState)) {
-          debug(`Playhead Stopped!`);
+          debug(`Playhead Stopping!`);
+          this.playheadStoppedComplete = true;
           return;
         }
         // Let the playhead move at an interval set according to newest segment duration
@@ -427,10 +438,10 @@ export class HLSRecorder extends EventEmitter {
         let tickInterval = 0;
         tickInterval = segmentDurationMs - (tsIncrementEnd - tsIncrementBegin);
         tickInterval = tickInterval < 2 ? 2 : tickInterval;
-
-        debug(`Playhead going to ping again after ${tickInterval}ms`);
-
-        await this._timer(tickInterval);
+        if (this.playheadState === (PlayheadState.RUNNING as PlayheadState)) {
+          debug(`Playhead going to ping again after ${tickInterval}ms`);
+          await this._timer(tickInterval);
+        }
       } catch (err) {
         debug(`Playhead consumer crashed`);
         console.error(err);
