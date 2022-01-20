@@ -4,6 +4,9 @@
 
 Node library for recording HLS Live
 
+## Prerequisites
+- nodejs >= 12.0.0
+
 ## Installation
 
 ```
@@ -50,7 +53,8 @@ recorder.start(); // Start recording VOD2live stream
  * The recording can also be played back, in the form of an event Hls stream.
  *  If you want to view the recorded stream locally, then use the follwoing lines: 
  **/
-const restify = require('restify')
+
+// (!) Be sure to have 'restify' imported first 
 recorder.setRestifyServer(restify); // Create a Restify server instance in recorder
 recorder.listen(8001); // Have server listening on port 8001
 
@@ -80,7 +84,8 @@ recorder.start(); // Start recording live stream
  * The recording can also be played back, in the form of an event Hls stream.
  *  If you want to view the recorded stream locally, then use the follwoing lines: 
  **/
-const restify = require('restify')
+
+// (!) Be sure to have 'restify' imported first 
 recorder.setRestifyServer(restify); // Create a Restify server instance in recorder
 recorder.listen(8001); // Have server listening on port 8001
 

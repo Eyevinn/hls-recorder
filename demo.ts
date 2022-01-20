@@ -1,5 +1,6 @@
 import { IRecorderOptions } from "./index.js";
 import { HLSRecorder, ISegments } from "./index";
+// import restify from "restify";
 
 const timer = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -23,25 +24,18 @@ const URI7 = "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u
 const URI8 = "https://lab-live.cdn.eyevinn.technology/ED_V4/master.m3u8";
 
 const rec_opts: IRecorderOptions = {
-  recordDuration: 120,
+  recordDuration: 180,
   windowSize: -1, // -1 for infinite* (max cap defaults at 30 000 seconds/5 minutes if source is a live manifest. To overwrite the max cap, just specify a windowsize.)
   vod: true,
 };
 const recorder = new HLSRecorder(URI2, rec_opts);
-recorder.on(
-  "mseq-increment",
-  async (data: { allPlaylistSegments: ISegments }) => {
-    const variants = Object.keys(data.allPlaylistSegments["video"]);
-    const level0 = variants[0];
-    console.log(
-      `Recorded Segments: ${JSON.stringify(
-        data.allPlaylistSegments["video"][level0],
-        null,
-        2
-      )}`
-    );
-  }
-);
+recorder.on("mseq-increment", async (data: { allPlaylistSegments: ISegments }) => {
+  const variants = Object.keys(data.allPlaylistSegments["video"]);
+  const level0 = variants[0];
+  console.log(
+    `Recorded Segments: ${JSON.stringify(data.allPlaylistSegments["video"][level0], null, 2)}`
+  );
+});
 recorder.on("error", (err: any) => {
   console.log(`ERROR -> ${JSON.stringify(err)}`);
   throw new Error("Something Bad Happend (>.<)");
@@ -49,9 +43,9 @@ recorder.on("error", (err: any) => {
 
 const run = async () => {
   recorder.start();
-  // const restify = require('restify')
-  // recorder.setRestifyServer(restify);
-  // recorder.listen(1377); // Playback at "http://localhost:1377/live/master.m3u8"
+  /* (!) Be sure to have 'restify' imported first */
+  //recorder.setRestifyServer(restify);
+  //recorder.listen(1377); // Playback at "http://localhost:1377/live/master.m3u8"
 };
 /**********************
  * Run Driver function

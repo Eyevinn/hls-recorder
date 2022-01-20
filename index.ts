@@ -20,7 +20,7 @@ import {
   _handleAudioManifest,
   _handleSubtitleManifest,
   IRecData,
-} from "./util/handlers.js";
+} from "./util/handlers";
 
 export interface IRecorderOptions {
   recordDuration?: number; // how long in seconds before ending event-stream
@@ -316,6 +316,7 @@ export class HLSRecorder extends EventEmitter {
       try {
         debug("Stopping HLS Recorder");
         if (this.sourcePlaylistType !== PlaylistType.VOD) {
+          this.stopPlayhead();
           debug(`Stopping Playhead, creating a VOD, and shutting down the server...`);
           if (Object.keys(this.segments["video"]).length > 0) {
             this._addEndlistTag();
@@ -325,7 +326,6 @@ export class HLSRecorder extends EventEmitter {
               cookieJar: this.cookieJar,
             });
           }
-          this.stopPlayhead();
         }
         if (this.serverStarted) {
           this.server.close();
@@ -343,7 +343,6 @@ export class HLSRecorder extends EventEmitter {
   async startPlayhead(): Promise<void> {
     // Init playhead state
     this.playheadState = PlayheadState.RUNNING as PlayheadState;
-
     try {
       // Pre-load
       await this._loadAllManifest();
@@ -392,11 +391,13 @@ export class HLSRecorder extends EventEmitter {
             "Source has become a VOD. And vodRealTime Config is false.",
             "Procceeding to stop Playhead and create a VOD..."
           );
-          this.emit("mseq-increment", {
-            allPlaylistSegments: this.segments,
-            type: this.sourcePlaylistType,
-            cookieJar: this.cookieJar,
-          });
+          if (this.playheadState === (PlayheadState.RUNNING as PlayheadState)) {
+            this.emit("mseq-increment", {
+              allPlaylistSegments: this.segments,
+              type: this.sourcePlaylistType,
+              cookieJar: this.cookieJar,
+            });
+          }
           this.stopPlayhead();
           continue;
         }
@@ -413,11 +414,13 @@ export class HLSRecorder extends EventEmitter {
           if (this.addEndTag) {
             this.sourcePlaylistType = PlaylistType.VOD;
             this._addEndlistTag();
-            this.emit("mseq-increment", {
-              allPlaylistSegments: this.segments,
-              type: this.sourcePlaylistType,
-              cookieJar: this.cookieJar,
-            });
+            if (this.playheadState === (PlayheadState.RUNNING as PlayheadState)) {
+              this.emit("mseq-increment", {
+                allPlaylistSegments: this.segments,
+                type: this.sourcePlaylistType,
+                cookieJar: this.cookieJar,
+              });
+            }
           }
           this.stopPlayhead();
           continue;
@@ -427,10 +430,10 @@ export class HLSRecorder extends EventEmitter {
         let tickInterval = 0;
         tickInterval = segmentDurationMs - (tsIncrementEnd - tsIncrementBegin);
         tickInterval = tickInterval < 2 ? 2 : tickInterval;
-
-        debug(`Playhead going to ping again after ${tickInterval}ms`);
-
-        await this._timer(tickInterval);
+        if (this.playheadState === (PlayheadState.RUNNING as PlayheadState)) {
+          debug(`Playhead going to ping again after ${tickInterval}ms`);
+          await this._timer(tickInterval);
+        }
       } catch (err) {
         debug(`Playhead consumer crashed`);
         console.error(err);
@@ -510,7 +513,10 @@ export class HLSRecorder extends EventEmitter {
       // Determine if time to emitt event. New Segments may have been pushed.
       if (this.shouldEmitt) {
         // If type VOD then Emitt at outer level. NOT here!
-        if (this.sourcePlaylistType !== PlaylistType.VOD) {
+        if (
+          this.sourcePlaylistType !== PlaylistType.VOD &&
+          this.playheadState === (PlayheadState.RUNNING as PlayheadState)
+        ) {
           this.emit("mseq-increment", {
             allPlaylistSegments: this.segments,
             type: this.sourcePlaylistType,

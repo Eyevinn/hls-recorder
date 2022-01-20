@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import url from "url";
-import Cookie from "./cookie.js";
-import { paramError, CookieParseError } from "./errors.js";
+import Cookie from "./cookie";
+import { paramError, CookieParseError } from "./errors";
 
 export default class CookieJar {
   flags: any;
