@@ -151,7 +151,6 @@ export class HLSRecorder extends EventEmitter {
   mediaManifests: IMediaManifestList;
   masterManifest: any;
   playheadState: PlayheadState;
-  playheadStoppedComplete: boolean;
   prevSourceMediaSeq: number;
   prevSourceSegCount: number;
   recorderM3U8TargetDuration: number;
@@ -208,7 +207,6 @@ export class HLSRecorder extends EventEmitter {
     this.recorderM3U8TargetDuration = 0;
     this.recorderM3U8MseqCount = 0;
     this.recorderM3U8DseqCount = 0;
-    this.playheadStoppedComplete = true;
     this.playheadState = PlayheadState.IDLE;
 
     this.sourceMasterManifest = "";
@@ -315,19 +313,11 @@ export class HLSRecorder extends EventEmitter {
 
   stop() {
     return new Promise<string>(async (resolve, reject) => {
-      let loopLimit = 20;
       try {
         debug("Stopping HLS Recorder");
         if (this.sourcePlaylistType !== PlaylistType.VOD) {
           this.stopPlayhead();
           debug(`Stopping Playhead, creating a VOD, and shutting down the server...`);
-          while (!this.playheadStoppedComplete && loopLimit > 0) {
-            await this._timer(1000);
-            loopLimit--;
-          }
-          if (this.playheadStoppedComplete) {
-            debug(`Playhead has officially stopped!`);
-          }
           if (Object.keys(this.segments["video"]).length > 0) {
             this._addEndlistTag();
             this.emit("mseq-increment", {
@@ -353,7 +343,6 @@ export class HLSRecorder extends EventEmitter {
   async startPlayhead(): Promise<void> {
     // Init playhead state
     this.playheadState = PlayheadState.RUNNING as PlayheadState;
-    this.playheadStoppedComplete = false;
     try {
       // Pre-load
       await this._loadAllManifest();
@@ -377,8 +366,7 @@ export class HLSRecorder extends EventEmitter {
     while (this.playheadState !== (PlayheadState.CRASHED as PlayheadState)) {
       try {
         if (this.playheadState === (PlayheadState.STOPPED as PlayheadState)) {
-          debug(`Playhead Stopping!`);
-          this.playheadStoppedComplete = true;
+          debug(`Playhead Stopped!`);
           return;
         }
         // Let the playhead move at an interval set according to newest segment duration
@@ -403,11 +391,13 @@ export class HLSRecorder extends EventEmitter {
             "Source has become a VOD. And vodRealTime Config is false.",
             "Procceeding to stop Playhead and create a VOD..."
           );
-          this.emit("mseq-increment", {
-            allPlaylistSegments: this.segments,
-            type: this.sourcePlaylistType,
-            cookieJar: this.cookieJar,
-          });
+          if (this.playheadState === (PlayheadState.RUNNING as PlayheadState)) {
+            this.emit("mseq-increment", {
+              allPlaylistSegments: this.segments,
+              type: this.sourcePlaylistType,
+              cookieJar: this.cookieJar,
+            });
+          }
           this.stopPlayhead();
           continue;
         }
@@ -424,11 +414,13 @@ export class HLSRecorder extends EventEmitter {
           if (this.addEndTag) {
             this.sourcePlaylistType = PlaylistType.VOD;
             this._addEndlistTag();
-            this.emit("mseq-increment", {
-              allPlaylistSegments: this.segments,
-              type: this.sourcePlaylistType,
-              cookieJar: this.cookieJar,
-            });
+            if (this.playheadState === (PlayheadState.RUNNING as PlayheadState)) {
+              this.emit("mseq-increment", {
+                allPlaylistSegments: this.segments,
+                type: this.sourcePlaylistType,
+                cookieJar: this.cookieJar,
+              });
+            }
           }
           this.stopPlayhead();
           continue;
@@ -521,7 +513,10 @@ export class HLSRecorder extends EventEmitter {
       // Determine if time to emitt event. New Segments may have been pushed.
       if (this.shouldEmitt) {
         // If type VOD then Emitt at outer level. NOT here!
-        if (this.sourcePlaylistType !== PlaylistType.VOD) {
+        if (
+          this.sourcePlaylistType !== PlaylistType.VOD &&
+          this.playheadState === (PlayheadState.RUNNING as PlayheadState)
+        ) {
           this.emit("mseq-increment", {
             allPlaylistSegments: this.segments,
             type: this.sourcePlaylistType,
