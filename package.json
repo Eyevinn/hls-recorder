@@ -1,7 +1,8 @@
 {
   "name": "@eyevinn/hls-recorder",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "NPM library to record live HLS",
+  "main": "dist/index.js",
   "scripts": {
     "build": "tsc --project ./",
     "dev": "node dist/demo.js",

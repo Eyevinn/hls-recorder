@@ -20,7 +20,7 @@ import {
   _handleAudioManifest,
   _handleSubtitleManifest,
   IRecData,
-} from "./util/handlers";
+} from "./util/handlers.js";
 
 export interface IRecorderOptions {
   recordDuration?: number; // how long in seconds before ending event-stream

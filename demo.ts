@@ -1,5 +1,4 @@
-import { IRecorderOptions } from "./index.js";
-import { HLSRecorder, ISegments } from "./index";
+import { HLSRecorder, ISegments, IRecorderOptions } from "./index";
 // import restify from "restify";
 
 const timer = (ms: number) => new Promise((res) => setTimeout(res, ms));
