@@ -39,6 +39,8 @@ export interface IGetMediaPlaylistM3U8Options {
   mapString?: string;
 }
 export interface ISetInitPlaylistDataInput {
+  VERSION?: number; // hls version
+  INDEP_SEGS?: boolean; // add INDEPENDENT-SEGMENTS tag
   MSEQ: number; // starting media-sequence value
   DSEQ: number; // starting discontinuity-sequence value
   TARGET_DUR: number; // duration for each segment in playlist
@@ -132,11 +134,20 @@ export class MockLiveM3U8Generator {
     }
     data = this.liveStreamData[variant];
     let manifest = "";
-    manifest += this.header;
+    if (data.VERSION) {
+      manifest += `#EXTM3U
+      #EXT-X-VERSION:${data.VERSION}`;
+    } else {
+      manifest += this.header;
+    }
+
     if (type === EnumStreamType.EVENT) {
       manifest += `\n#EXT-X-PLAYLIST-TYPE:EVENT`;
     } else if (type === EnumStreamType.VOD) {
       manifest += `\n#EXT-X-PLAYLIST-TYPE:VOD`;
+    }
+    if (data.INDEP_SEGS) {
+      manifest += "\n#EXT-X-INDEPENDENT-SEGMENTS";
     }
     manifest += `\n#EXT-X-TARGETDURATION:${data.TARGET_DUR}`;
     manifest += `\n#EXT-X-DISCONTINUITY-SEQUENCE:${data.DSEQ}`;

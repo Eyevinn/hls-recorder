@@ -1,11 +1,7 @@
 import Debug from "debug";
 const debug = Debug("hls-recorder");
 import { ISegments } from "..";
-import {
-  GenerateMediaM3U8,
-  GenerateAudioM3U8,
-  GenerateSubtitleM3U8,
-} from "./manifest_generator";
+import { GenerateMediaM3U8, GenerateAudioM3U8, GenerateSubtitleM3U8 } from "./manifest_generator";
 
 export interface IRecData {
   mseq: number;
@@ -13,14 +9,11 @@ export interface IRecData {
   targetDuration: number;
   allSegments: ISegments;
   playlistType?: number;
+  version?: number;
+  independentSegments?: boolean;
 }
 
-export async function _handleMasterManifest(
-  req: any,
-  res: any,
-  next: any,
-  masterM3u: string
-) {
+export async function _handleMasterManifest(req: any, res: any, next: any, masterM3u: string) {
   try {
     if (masterM3u === "") {
       masterM3u = "Source HLS steam does not have a multivariant manifest";
@@ -36,12 +29,7 @@ export async function _handleMasterManifest(
   }
 }
 
-export async function _handleMediaManifest(
-  req: any,
-  res: any,
-  next: any,
-  recData: IRecData
-) {
+export async function _handleMediaManifest(req: any, res: any, next: any, recData: IRecData) {
   debug(`req.url=${req.url}`);
   try {
     let body = null;
@@ -59,12 +47,7 @@ export async function _handleMediaManifest(
   }
 }
 
-export async function _handleAudioManifest(
-  req: any,
-  res: any,
-  next: any,
-  recData: IRecData
-) {
+export async function _handleAudioManifest(req: any, res: any, next: any, recData: IRecData) {
   debug(`req.url=${req.url}`);
   try {
     let body = null;
@@ -82,12 +65,7 @@ export async function _handleAudioManifest(
   }
 }
 
-export async function _handleSubtitleManifest(
-  req: any,
-  res: any,
-  next: any,
-  recData: IRecData
-) {
+export async function _handleSubtitleManifest(req: any, res: any, next: any, recData: IRecData) {
   debug(`req.url=${req.url}`);
   try {
     let body = null;

@@ -1,5 +1,6 @@
 const nock = require("nock");
 import { HLSRecorder, IMseqIncrementEventPayload, ISegments } from "..";
+import { GenerateMediaM3U8 } from "../util/manifest_generator";
 import {
   MockLiveM3U8Generator,
   EnumStreamType,
@@ -2044,6 +2045,7 @@ describe("HLSRecorder, when source is only a media manifest,", () => {
       audioTracks: [],
       subtitleTracks: [],
     };
+    let _m3u8: string | null = "";
     _mockHLSSource.setMultiVariant(config);
     _mockHLSSource.setInitPlaylistData({
       MSEQ: 1,
@@ -2051,6 +2053,8 @@ describe("HLSRecorder, when source is only a media manifest,", () => {
       TARGET_DUR: 10,
       START_ON: 0,
       END_ON: 21,
+      VERSION: 5,
+      INDEP_SEGS: true,
     });
     _mockHLSSource.insertAt({
       replacementString: "#EXT-X-ENDLIST",
@@ -2071,6 +2075,14 @@ describe("HLSRecorder, when source is only a media manifest,", () => {
     });
     recorder.on("mseq-increment", async (data: IMseqIncrementEventPayload) => {
       LAST_RETURNED_EVENT_DATA = data;
+      let level_0 = parseInt(Object.keys(data.allPlaylistSegments.video)[0]);
+      _m3u8 = await GenerateMediaM3U8(level_0, {
+        allSegments: LAST_RETURNED_EVENT_DATA.allPlaylistSegments,
+        targetDuration: recorder.recorderM3U8TargetDuration,
+        mseq: 0,
+        independentSegments: recorder.getAdditionalSourcePlaylistInfo().independentSegments,
+        version: recorder.getAdditionalSourcePlaylistInfo().version,
+      });
     });
     recorder.on("error", (err: any) => {
       throw new Error("Something Bad Happend (>.<)" + err);
@@ -2085,6 +2097,8 @@ describe("HLSRecorder, when source is only a media manifest,", () => {
       const segList = videoVariants[bw].segList;
       const lastIdx = segList.length - 1;
 
+      expect(_m3u8?.indexOf("#EXT-X-VERSION:5")).not.toBe(-1);
+      expect(_m3u8?.indexOf("#EXT-X-INDEPENDENT-SEGMENTS")).not.toBe(-1);
       expect(segList[0].index).toBe(1);
       expect(segList[0].uri).toBe(`https://mock.mock.com/live/video-500500-seg_0.ts`);
       expect(segList[lastIdx - 1].index).toBe(20);

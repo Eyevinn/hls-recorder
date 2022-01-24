@@ -69,10 +69,10 @@ interface IVideoSegments {
   };
 }
 
-type FetchResult = {
+interface FetchResult extends IAdditionalPlaylistInfo {
   m3u: string;
   mediaSequence: number;
-};
+}
 
 interface IAudioSegments {
   [group: string]: {
@@ -109,7 +109,10 @@ interface m3u {
   get(key: string): any;
   set(key: string, value: any): any;
 }
-
+interface IAdditionalPlaylistInfo {
+  independentSegments?: boolean;
+  version?: number;
+}
 const enum PlayheadState {
   IDLE = 0,
   RUNNING = 1,
@@ -171,6 +174,7 @@ export class HLSRecorder extends EventEmitter {
   serverStarted: boolean;
   shouldEmitt: boolean | null;
   currSourceSegCount: number;
+  additionalSourcePlaylistInfo: IAdditionalPlaylistInfo;
 
   constructor(source: any, opts: IRecorderOptions) {
     super();
@@ -208,6 +212,7 @@ export class HLSRecorder extends EventEmitter {
     this.recorderM3U8MseqCount = 0;
     this.recorderM3U8DseqCount = 0;
     this.playheadState = PlayheadState.IDLE;
+    this.additionalSourcePlaylistInfo = {};
 
     this.sourceMasterManifest = "";
     this.sourceMediaManifestURIs = {};
@@ -451,6 +456,10 @@ export class HLSRecorder extends EventEmitter {
   async getMasterM3U8() {
     debug(`Master Manifest Requested`);
     return this.masterManifest;
+  }
+
+  getAdditionalSourcePlaylistInfo() {
+    return this.additionalSourcePlaylistInfo;
   }
 
   async createMediaM3U8(bw: number, segments: ISegments) {
@@ -1372,9 +1381,24 @@ export class HLSRecorder extends EventEmitter {
       );
 
       let valueList = resultsList.map((item) => item.value);
+      if (
+        valueList.length > 0 &&
+        valueList[0].version &&
+        !this.additionalSourcePlaylistInfo["version"]
+      ) {
+        this.additionalSourcePlaylistInfo["version"] = valueList[0].version;
+      }
+      if (
+        valueList.length > 0 &&
+        valueList[0].independentSegments &&
+        !this.additionalSourcePlaylistInfo["independentSegments"]
+      ) {
+        this.additionalSourcePlaylistInfo["independentSegments"] = valueList[0].independentSegments;
+      }
       this.mediaManifests = this._appendToMediaManifests(valueList);
       this.audioManifests = this._appendToAudioManifests(valueList);
       this.subtitleManifests = this._appendToSubtitleManifests(valueList);
+
       return;
     }
   }
@@ -1423,6 +1447,8 @@ export class HLSRecorder extends EventEmitter {
           const result: FetchResult = {
             m3u: m3u.toString(),
             mediaSequence: m3u.get("mediaSequence"),
+            independentSegments: m3u.get("independentSegments"),
+            version: m3u.get("version"),
           };
           resolve(result);
         } catch (exc) {
