@@ -141,14 +141,16 @@ export async function GenerateMediaM3U8(BW: number, OPTIONS: IRecData): Promise<
   debug(`[m3u8generator]: Started Generating the Manifest with Mseq:[${OPTIONS.mseq}]...`);
 
   let m3u8 = "#EXTM3U\n";
-  m3u8 += "#EXT-X-VERSION:7\n";
+  m3u8 += `#EXT-X-VERSION:${OPTIONS.version ? OPTIONS.version : "6"}\n`;
   m3u8 += m3u8Header();
   if (OPTIONS.playlistType === PlaylistType.VOD) {
     m3u8 += `#EXT-X-PLAYLIST-TYPE:VOD\n`;
   } else {
     m3u8 += `#EXT-X-PLAYLIST-TYPE:EVENT\n`;
   }
-  m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
+  if (OPTIONS.independentSegments) {
+    m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
+  }
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
   if (OPTIONS.dseq !== undefined) {
@@ -204,14 +206,16 @@ export async function GenerateAudioM3U8(
   debug(`[m3u8generator]: Started Generating the Audio Manifest with Mseq:[${OPTIONS.mseq}]...`);
 
   let m3u8 = "#EXTM3U\n";
-  m3u8 += "#EXT-X-VERSION:7\n";
+  m3u8 += `#EXT-X-VERSION:${OPTIONS.version ? OPTIONS.version : "6"}\n`;
   m3u8 += m3u8Header();
   if (OPTIONS.playlistType === PlaylistType.VOD) {
     m3u8 += `#EXT-X-PLAYLIST-TYPE:VOD\n`;
   } else {
     m3u8 += `#EXT-X-PLAYLIST-TYPE:EVENT\n`;
   }
-  m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
+  if (OPTIONS.independentSegments) {
+    m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
+  }
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
   if (OPTIONS.dseq !== undefined) {
@@ -268,14 +272,16 @@ export async function GenerateSubtitleM3U8(
   debug(`[m3u8generator]: Started Generating the Subtitle Manifest with Mseq:[${OPTIONS.mseq}]...`);
 
   let m3u8 = "#EXTM3U\n";
-  m3u8 += "#EXT-X-VERSION:7\n";
+  m3u8 += `#EXT-X-VERSION:${OPTIONS.version ? OPTIONS.version : "6"}\n`;
   m3u8 += m3u8Header();
   if (OPTIONS.playlistType === PlaylistType.VOD) {
     m3u8 += `#EXT-X-PLAYLIST-TYPE:VOD\n`;
   } else {
     m3u8 += `#EXT-X-PLAYLIST-TYPE:EVENT\n`;
   }
-  m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
+  if (OPTIONS.independentSegments) {
+    m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
+  }
   m3u8 += "#EXT-X-TARGETDURATION:" + OPTIONS.targetDuration + "\n";
   m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + OPTIONS.mseq + "\n";
   if (OPTIONS.dseq !== undefined) {
@@ -298,7 +304,10 @@ export async function GenerateMasterM3U8(m3u: any): Promise<string | null> {
   );
 
   let m3u8 = "#EXTM3U\n";
-  m3u8 += "#EXT-X-VERSION:7\n";
+  m3u8 += `#EXT-X-VERSION:${m3u.get("version") ? m3u.get("version") : "6"}\n`;
+  if (m3u.get("independentSegments")) {
+    m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
+  }
   m3u8 += m3u8Header();
   m3u8 += `\n## Media Tracks \n`;
   for (let i = 0; i < m3u.items.StreamItem.length; i++) {
